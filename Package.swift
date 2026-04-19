@@ -11,7 +11,7 @@ let package = Package(
             name: "ClaudeSpeaki",
             path: "Sources/ClaudeSpeaki",
             resources: [
-                .copy("../Resources")
+                .copy("Resources")
             ],
             linkerSettings: [
                 .linkedFramework("AppKit"),

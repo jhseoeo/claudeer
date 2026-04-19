@@ -2,14 +2,82 @@ import AppKit
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     var mascotWindow: MascotWindow?
+    var spriteEngine: SpriteEngine?
+    var characterController: CharacterController?
+    var eventServer: EventServer?
+    var eventManager: EventManager?
+    var soundPlayer: SoundPlayer?
+    var speechBubble: SpeechBubbleView?
+    var config: SpeakiConfig = .default
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
 
-        mascotWindow = MascotWindow()
-        mascotWindow?.makeKeyAndOrderFront(nil)
+        // Load config
+        if let configURL = Bundle.module.url(forResource: "Resources", withExtension: nil)?
+            .appendingPathComponent("config.json") {
+            config = SpeakiConfig.load(from: configURL)
+        }
 
-        print("Claude Speaki started — overlay window active")
+        // Setup window
+        mascotWindow = MascotWindow()
+
+        let contentView = NSView(frame: mascotWindow!.frame)
+        contentView.wantsLayer = true
+
+        // Setup sprite
+        let spriteSize = NSRect(x: 100, y: 100, width: 64, height: 64)
+        spriteEngine = SpriteEngine(frame: spriteSize)
+        contentView.addSubview(spriteEngine!.view)
+
+        // Setup speech bubble
+        speechBubble = SpeechBubbleView()
+        speechBubble?.isHidden = true
+        contentView.addSubview(speechBubble!)
+
+        mascotWindow?.contentView = contentView
+
+        // Load resources
+        if let resourceURL = Bundle.module.url(forResource: "Resources", withExtension: nil) {
+            spriteEngine?.loadSprites(from: resourceURL.appendingPathComponent("sprites"))
+
+            soundPlayer = SoundPlayer()
+            soundPlayer?.loadSounds(from: resourceURL.appendingPathComponent("sounds"))
+        }
+
+        // Setup movement
+        characterController = CharacterController(spriteEngine: spriteEngine!)
+        if let screen = NSScreen.main {
+            let preset = AreaPreset(rawValue: config.defaultArea) ?? .bottom
+            characterController?.setArea(preset, screenSize: screen.frame.size)
+        }
+        characterController?.start()
+
+        // Setup event manager
+        eventManager = EventManager(
+            characterController: characterController!,
+            soundPlayer: soundPlayer ?? SoundPlayer(),
+            speechBubble: speechBubble!,
+            spriteEngine: spriteEngine!,
+            config: config
+        )
+        eventManager?.startPIDMonitoring()
+
+        // Start socket server
+        eventServer = EventServer()
+        eventServer?.onEvent = { [weak self] event in
+            self?.eventManager?.handleEvent(event)
+        }
+        eventServer?.start()
+
+        mascotWindow?.makeKeyAndOrderFront(nil)
+        print("Claude Speaki started")
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        characterController?.stop()
+        eventServer?.stop()
+        eventManager?.stopPIDMonitoring()
     }
 }
 
