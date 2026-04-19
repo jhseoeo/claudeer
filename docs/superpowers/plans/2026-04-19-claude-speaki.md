@@ -1,0 +1,1787 @@
+# Claude Speaki Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Build a macOS desktop mascot app that listens for Claude Code session events via Unix socket and reacts with sprite animations, speech bubbles, and sounds.
+
+**Architecture:** SwiftUI + AppKit hybrid menu bar app. The app itself acts as the daemon — opens a Unix domain socket, listens for JSON events from Claude Code hook scripts (Python). Transparent overlay NSWindow renders the sprite character. No separate daemon process.
+
+**Tech Stack:** Swift 5.9+, macOS 13+, AppKit (overlay window), SwiftUI (menu bar popover), POSIX sockets, AVFoundation (sound), SPM
+
+---
+
+## File Structure
+
+```
+claude-speaki/
+  temp/                              # archived clflmgr files (reference only)
+  Package.swift                      # Swift package manifest
+  Sources/
+    ClaudeSpeaki/
+      App.swift                      # @main entry + NSApplicationDelegate
+      Config.swift                   # config.json loading + area presets
+      MascotWindow.swift             # transparent overlay NSWindow
+      SpriteEngine.swift             # sprite loading + animation + state machine
+      CharacterController.swift      # movement logic + area bounds + event reactions
+      EventServer.swift              # Unix domain socket server
+      SoundPlayer.swift              # sound file playback
+      SpeechBubbleView.swift         # speech bubble NSView
+      MenuBarController.swift        # status bar item + SwiftUI popover
+    Resources/
+      sprites/
+        idle.png                     # placeholder sprite (single pixel)
+      sounds/
+      config.json                    # default config
+  Tests/
+    ClaudeSpeakiTests/
+      ConfigTests.swift
+      EventServerTests.swift
+      AreaPresetTests.swift
+  hooks/                             # Claude Code plugin hooks
+    hooks.json
+    scripts/
+      notify.py
+  .claude-plugin/
+    plugin.json
+  README.md
+```
+
+---
+
+### Task 1: Project Scaffolding
+
+**Files:**
+- Move: all existing files → `temp/`
+- Create: `Package.swift`
+- Create: `Sources/ClaudeSpeaki/App.swift`
+- Create: `Sources/Resources/sprites/idle.png` (1x1 placeholder)
+- Create: `Sources/Resources/config.json`
+
+- [ ] **Step 1: Move existing files to temp/**
+
+```bash
+mkdir -p temp
+# Move everything except .git, temp, docs
+for item in .claude .claude-plugin .gitignore CLAUDE.md README.md config hooks skills src; do
+  [ -e "$item" ] && mv "$item" temp/
+done
+```
+
+- [ ] **Step 2: Create Package.swift**
+
+```swift
+// swift-tools-version: 5.9
+import PackageDescription
+
+let package = Package(
+    name: "ClaudeSpeaki",
+    platforms: [
+        .macOS(.v13)
+    ],
+    targets: [
+        .executableTarget(
+            name: "ClaudeSpeaki",
+            path: "Sources/ClaudeSpeaki",
+            resources: [
+                .copy("../Resources")
+            ],
+            linkerSettings: [
+                .linkedFramework("AppKit"),
+                .linkedFramework("AVFoundation"),
+            ]
+        ),
+        .testTarget(
+            name: "ClaudeSpeakiTests",
+            dependencies: ["ClaudeSpeaki"],
+            path: "Tests/ClaudeSpeakiTests"
+        ),
+    ]
+)
+```
+
+- [ ] **Step 3: Create minimal App.swift**
+
+```swift
+import AppKit
+
+class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(.accessory)
+        print("Claude Speaki started")
+    }
+}
+
+let app = NSApplication.shared
+let delegate = AppDelegate()
+app.delegate = delegate
+app.run()
+```
+
+- [ ] **Step 4: Create placeholder resources**
+
+`Sources/Resources/config.json`:
+```json
+{
+  "default_area": "bottom",
+  "speeches": {
+    "session_start": "Hello!",
+    "need_input": "Hey, need your input!",
+    "session_end": "Bye!"
+  }
+}
+```
+
+`Sources/Resources/sprites/idle.png`: 1x1 transparent PNG placeholder (create programmatically or empty file).
+
+- [ ] **Step 5: Verify build**
+
+Run: `swift build`
+Expected: BUILD SUCCEEDED
+
+- [ ] **Step 6: Verify run**
+
+Run: `.build/debug/ClaudeSpeaki &` then kill it after verifying "Claude Speaki started" prints.
+
+- [ ] **Step 7: Initialize git**
+
+```bash
+rm -rf .git
+git init
+cat > .gitignore << 'EOF'
+.build/
+.swiftpm/
+*.xcodeproj
+*.xcworkspace
+DerivedData/
+.DS_Store
+temp/
+EOF
+git add -A
+git commit -m "feat: initial project scaffolding with SPM"
+```
+
+---
+
+### Task 2: Config Loading
+
+**Files:**
+- Create: `Sources/ClaudeSpeaki/Config.swift`
+- Create: `Tests/ClaudeSpeakiTests/ConfigTests.swift`
+
+- [ ] **Step 1: Write the failing test**
+
+`Tests/ClaudeSpeakiTests/ConfigTests.swift`:
+```swift
+import XCTest
+@testable import ClaudeSpeaki
+
+final class ConfigTests: XCTestCase {
+    func testParseConfig() throws {
+        let json = """
+        {
+          "default_area": "bottom",
+          "speeches": {
+            "session_start": "Hi!",
+            "need_input": "Input please",
+            "session_end": "Bye"
+          }
+        }
+        """.data(using: .utf8)!
+
+        let config = try JSONDecoder().decode(SpeakiConfig.self, from: json)
+        XCTAssertEqual(config.defaultArea, "bottom")
+        XCTAssertEqual(config.speeches.sessionStart, "Hi!")
+        XCTAssertEqual(config.speeches.needInput, "Input please")
+        XCTAssertEqual(config.speeches.sessionEnd, "Bye")
+    }
+
+    func testDefaultConfig() {
+        let config = SpeakiConfig.default
+        XCTAssertEqual(config.defaultArea, "bottom")
+        XCTAssertFalse(config.speeches.needInput.isEmpty)
+    }
+}
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `swift test --filter ConfigTests`
+Expected: FAIL — `SpeakiConfig` not found
+
+- [ ] **Step 3: Write implementation**
+
+`Sources/ClaudeSpeaki/Config.swift`:
+```swift
+import Foundation
+
+struct Speeches: Codable {
+    let sessionStart: String
+    let needInput: String
+    let sessionEnd: String
+
+    enum CodingKeys: String, CodingKey {
+        case sessionStart = "session_start"
+        case needInput = "need_input"
+        case sessionEnd = "session_end"
+    }
+}
+
+struct SpeakiConfig: Codable {
+    let defaultArea: String
+    let speeches: Speeches
+
+    enum CodingKeys: String, CodingKey {
+        case defaultArea = "default_area"
+        case speeches
+    }
+
+    static let `default` = SpeakiConfig(
+        defaultArea: "bottom",
+        speeches: Speeches(
+            sessionStart: "Hello!",
+            needInput: "Need your input!",
+            sessionEnd: "Goodbye!"
+        )
+    )
+
+    static func load(from url: URL) -> SpeakiConfig {
+        guard let data = try? Data(contentsOf: url),
+              let config = try? JSONDecoder().decode(SpeakiConfig.self, from: data)
+        else {
+            return .default
+        }
+        return config
+    }
+}
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `swift test --filter ConfigTests`
+Expected: PASS
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add Sources/ClaudeSpeaki/Config.swift Tests/ClaudeSpeakiTests/ConfigTests.swift
+git commit -m "feat: add config loading with JSON parsing"
+```
+
+---
+
+### Task 3: Area Presets
+
+**Files:**
+- Create: `Sources/ClaudeSpeaki/AreaPreset.swift` (extracted from Config for clarity)
+- Create: `Tests/ClaudeSpeakiTests/AreaPresetTests.swift`
+
+- [ ] **Step 1: Write the failing test**
+
+`Tests/ClaudeSpeakiTests/AreaPresetTests.swift`:
+```swift
+import XCTest
+@testable import ClaudeSpeaki
+
+final class AreaPresetTests: XCTestCase {
+    let screenSize = CGSize(width: 1920, height: 1080)
+
+    func testBottomPreset() {
+        let rect = AreaPreset.bottom.rect(for: screenSize)
+        XCTAssertEqual(rect.origin.y, 0)
+        XCTAssertEqual(rect.size.width, 1920)
+        XCTAssertTrue(rect.size.height < 1080)
+    }
+
+    func testFullScreenPreset() {
+        let rect = AreaPreset.fullScreen.rect(for: screenSize)
+        XCTAssertEqual(rect, CGRect(origin: .zero, size: screenSize))
+    }
+
+    func testRightQuarterPreset() {
+        let rect = AreaPreset.rightQuarter.rect(for: screenSize)
+        XCTAssertEqual(rect.origin.x, 1440) // 1920 * 0.75
+        XCTAssertEqual(rect.size.width, 480) // 1920 * 0.25
+    }
+
+    func testFromString() {
+        XCTAssertEqual(AreaPreset(rawValue: "bottom"), .bottom)
+        XCTAssertEqual(AreaPreset(rawValue: "full_screen"), .fullScreen)
+        XCTAssertNil(AreaPreset(rawValue: "invalid"))
+    }
+}
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `swift test --filter AreaPresetTests`
+Expected: FAIL — `AreaPreset` not found
+
+- [ ] **Step 3: Write implementation**
+
+`Sources/ClaudeSpeaki/AreaPreset.swift`:
+```swift
+import Foundation
+
+enum AreaPreset: String, CaseIterable {
+    case fullScreen = "full_screen"
+    case bottom
+    case top
+    case menubar
+    case rightQuarter = "right_quarter"
+    case leftQuarter = "left_quarter"
+
+    var displayName: String {
+        switch self {
+        case .fullScreen: return "Full Screen"
+        case .bottom: return "Bottom"
+        case .top: return "Top"
+        case .menubar: return "Menu Bar"
+        case .rightQuarter: return "Right 1/4"
+        case .leftQuarter: return "Left 1/4"
+        }
+    }
+
+    func rect(for screenSize: CGSize) -> CGRect {
+        let w = screenSize.width
+        let h = screenSize.height
+        switch self {
+        case .fullScreen:
+            return CGRect(x: 0, y: 0, width: w, height: h)
+        case .bottom:
+            return CGRect(x: 0, y: 0, width: w, height: h * 0.15)
+        case .top:
+            return CGRect(x: 0, y: h * 0.85, width: w, height: h * 0.15)
+        case .menubar:
+            return CGRect(x: 0, y: h * 0.92, width: w, height: h * 0.08)
+        case .rightQuarter:
+            return CGRect(x: w * 0.75, y: 0, width: w * 0.25, height: h)
+        case .leftQuarter:
+            return CGRect(x: 0, y: 0, width: w * 0.25, height: h)
+        }
+    }
+}
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `swift test --filter AreaPresetTests`
+Expected: PASS
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add Sources/ClaudeSpeaki/AreaPreset.swift Tests/ClaudeSpeakiTests/AreaPresetTests.swift
+git commit -m "feat: add area presets for character movement bounds"
+```
+
+---
+
+### Task 4: Transparent Overlay Window
+
+**Files:**
+- Create: `Sources/ClaudeSpeaki/MascotWindow.swift`
+- Modify: `Sources/ClaudeSpeaki/App.swift`
+
+- [ ] **Step 1: Create MascotWindow**
+
+`Sources/ClaudeSpeaki/MascotWindow.swift`:
+```swift
+import AppKit
+
+class MascotWindow: NSWindow {
+    init() {
+        super.init(
+            contentRect: NSScreen.main?.frame ?? NSRect(x: 0, y: 0, width: 800, height: 600),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        isOpaque = false
+        backgroundColor = .clear
+        level = .floating
+        ignoresMouseEvents = true
+        collectionBehavior = [.canJoinAllSpaces, .stationary]
+        isMovableByWindowBackground = false
+        hasShadow = false
+    }
+}
+```
+
+- [ ] **Step 2: Update App.swift to show the window**
+
+`Sources/ClaudeSpeaki/App.swift`:
+```swift
+import AppKit
+
+class AppDelegate: NSObject, NSApplicationDelegate {
+    var mascotWindow: MascotWindow?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(.accessory)
+
+        mascotWindow = MascotWindow()
+        mascotWindow?.makeKeyAndOrderFront(nil)
+
+        print("Claude Speaki started — overlay window active")
+    }
+}
+
+let app = NSApplication.shared
+let delegate = AppDelegate()
+app.delegate = delegate
+app.run()
+```
+
+- [ ] **Step 3: Build and run to verify transparent window appears**
+
+Run: `swift build && .build/debug/ClaudeSpeaki &`
+Expected: App runs with no visible window (transparent), no dock icon, prints startup message. Kill with `kill %1`.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add Sources/ClaudeSpeaki/MascotWindow.swift Sources/ClaudeSpeaki/App.swift
+git commit -m "feat: add transparent overlay window"
+```
+
+---
+
+### Task 5: Sprite Engine
+
+**Files:**
+- Create: `Sources/ClaudeSpeaki/SpriteEngine.swift`
+
+- [ ] **Step 1: Create SpriteEngine with state machine**
+
+`Sources/ClaudeSpeaki/SpriteEngine.swift`:
+```swift
+import AppKit
+
+enum SpriteState: String, CaseIterable {
+    case idle
+    case walk
+    case alert
+}
+
+class SpriteEngine {
+    private(set) var currentState: SpriteState = .idle
+    private var sprites: [SpriteState: NSImage] = [:]
+    private let imageView: NSImageView
+
+    init(frame: NSRect) {
+        imageView = NSImageView(frame: frame)
+        imageView.imageScaling = .scaleProportionallyUpOrDown
+        imageView.animates = true
+        imageView.wantsLayer = true
+    }
+
+    var view: NSView { imageView }
+
+    var size: NSSize {
+        imageView.frame.size
+    }
+
+    func loadSprites(from directory: URL) {
+        let extensions = ["gif", "apng", "png"]
+        for state in SpriteState.allCases {
+            for ext in extensions {
+                let url = directory.appendingPathComponent("\(state.rawValue).\(ext)")
+                if FileManager.default.fileExists(atPath: url.path),
+                   let image = NSImage(contentsOf: url) {
+                    sprites[state] = image
+                    break
+                }
+            }
+        }
+        // Ensure idle exists — use first available sprite as fallback
+        if sprites[.idle] == nil, let first = sprites.values.first {
+            sprites[.idle] = first
+        }
+        setState(.idle)
+    }
+
+    func setState(_ state: SpriteState) {
+        currentState = state
+        let image = sprites[state] ?? sprites[.idle]
+        imageView.image = image
+    }
+
+    func setPosition(_ point: NSPoint) {
+        imageView.setFrameOrigin(point)
+    }
+
+    var position: NSPoint {
+        imageView.frame.origin
+    }
+}
+```
+
+- [ ] **Step 2: Wire SpriteEngine into MascotWindow**
+
+Update `Sources/ClaudeSpeaki/App.swift`:
+```swift
+import AppKit
+
+class AppDelegate: NSObject, NSApplicationDelegate {
+    var mascotWindow: MascotWindow?
+    var spriteEngine: SpriteEngine?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(.accessory)
+
+        mascotWindow = MascotWindow()
+
+        let spriteSize = NSRect(x: 100, y: 100, width: 64, height: 64)
+        spriteEngine = SpriteEngine(frame: spriteSize)
+
+        let contentView = NSView(frame: mascotWindow!.frame)
+        contentView.wantsLayer = true
+        contentView.addSubview(spriteEngine!.view)
+        mascotWindow?.contentView = contentView
+
+        // Load sprites from Resources
+        if let resourceURL = Bundle.module.url(forResource: "Resources", withExtension: nil) {
+            let spritesDir = resourceURL.appendingPathComponent("sprites")
+            spriteEngine?.loadSprites(from: spritesDir)
+        }
+
+        mascotWindow?.makeKeyAndOrderFront(nil)
+        print("Claude Speaki started")
+    }
+}
+
+let app = NSApplication.shared
+let delegate = AppDelegate()
+app.delegate = delegate
+app.run()
+```
+
+- [ ] **Step 3: Build and verify**
+
+Run: `swift build`
+Expected: BUILD SUCCEEDED
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add Sources/ClaudeSpeaki/SpriteEngine.swift Sources/ClaudeSpeaki/App.swift
+git commit -m "feat: add sprite engine with state machine and image loading"
+```
+
+---
+
+### Task 6: Character Movement
+
+**Files:**
+- Create: `Sources/ClaudeSpeaki/CharacterController.swift`
+- Modify: `Sources/ClaudeSpeaki/App.swift`
+
+- [ ] **Step 1: Create CharacterController**
+
+`Sources/ClaudeSpeaki/CharacterController.swift`:
+```swift
+import AppKit
+
+class CharacterController {
+    private let spriteEngine: SpriteEngine
+    private var movementTimer: Timer?
+    private var currentArea: CGRect = .zero
+    private var target: NSPoint = .zero
+    private var speed: CGFloat = 2.0
+
+    // Movement states
+    private var isMoving = false
+    private var idleTimer: TimeInterval = 0
+    private var idleDuration: TimeInterval = 0
+
+    init(spriteEngine: SpriteEngine) {
+        self.spriteEngine = spriteEngine
+    }
+
+    func setArea(_ preset: AreaPreset, screenSize: CGSize) {
+        currentArea = preset.rect(for: screenSize)
+        // Clamp current position to new area
+        let pos = clampToArea(spriteEngine.position)
+        spriteEngine.setPosition(pos)
+    }
+
+    func start() {
+        pickNewIdleDuration()
+        movementTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
+            self?.tick()
+        }
+    }
+
+    func stop() {
+        movementTimer?.invalidate()
+        movementTimer = nil
+    }
+
+    private func tick() {
+        if isMoving {
+            moveTowardTarget()
+        } else {
+            idleTimer += 1.0 / 30.0
+            if idleTimer >= idleDuration {
+                startWalking()
+            }
+        }
+    }
+
+    private func startWalking() {
+        isMoving = true
+        target = randomPointInArea()
+        spriteEngine.setState(.walk)
+    }
+
+    private func moveTowardTarget() {
+        var pos = spriteEngine.position
+        let dx = target.x - pos.x
+        let dy = target.y - pos.y
+        let dist = sqrt(dx * dx + dy * dy)
+
+        if dist < speed {
+            pos = target
+            isMoving = false
+            spriteEngine.setState(.idle)
+            pickNewIdleDuration()
+        } else {
+            pos.x += (dx / dist) * speed
+            pos.y += (dy / dist) * speed
+        }
+        spriteEngine.setPosition(pos)
+    }
+
+    private func randomPointInArea() -> NSPoint {
+        let spriteSize = spriteEngine.size
+        let minX = currentArea.minX
+        let maxX = currentArea.maxX - spriteSize.width
+        let minY = currentArea.minY
+        let maxY = currentArea.maxY - spriteSize.height
+        return NSPoint(
+            x: CGFloat.random(in: minX...max(minX, maxX)),
+            y: CGFloat.random(in: minY...max(minY, maxY))
+        )
+    }
+
+    private func clampToArea(_ point: NSPoint) -> NSPoint {
+        let spriteSize = spriteEngine.size
+        return NSPoint(
+            x: min(max(point.x, currentArea.minX), currentArea.maxX - spriteSize.width),
+            y: min(max(point.y, currentArea.minY), currentArea.maxY - spriteSize.height)
+        )
+    }
+
+    private func pickNewIdleDuration() {
+        idleTimer = 0
+        idleDuration = Double.random(in: 2.0...6.0)
+    }
+
+    // Called by event manager
+    func triggerAlert() {
+        spriteEngine.setState(.alert)
+        isMoving = false
+        // Return to idle after 3 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+            self?.spriteEngine.setState(.idle)
+            self?.pickNewIdleDuration()
+        }
+    }
+}
+```
+
+- [ ] **Step 2: Wire CharacterController into App.swift**
+
+Update `applicationDidFinishLaunching` in `Sources/ClaudeSpeaki/App.swift` — add after sprite setup:
+```swift
+    var characterController: CharacterController?
+
+    // ... in applicationDidFinishLaunching, after spriteEngine setup:
+    characterController = CharacterController(spriteEngine: spriteEngine!)
+    if let screen = NSScreen.main {
+        let preset = AreaPreset(rawValue: config.defaultArea) ?? .bottom
+        characterController?.setArea(preset, screenSize: screen.frame.size)
+    }
+    characterController?.start()
+```
+
+(Full App.swift update shown in step 3.)
+
+- [ ] **Step 3: Full App.swift with all wiring so far**
+
+`Sources/ClaudeSpeaki/App.swift`:
+```swift
+import AppKit
+
+class AppDelegate: NSObject, NSApplicationDelegate {
+    var mascotWindow: MascotWindow?
+    var spriteEngine: SpriteEngine?
+    var characterController: CharacterController?
+    var config: SpeakiConfig = .default
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(.accessory)
+
+        // Load config
+        if let configURL = Bundle.module.url(forResource: "Resources", withExtension: nil)?
+            .appendingPathComponent("config.json") {
+            config = SpeakiConfig.load(from: configURL)
+        }
+
+        // Setup window
+        mascotWindow = MascotWindow()
+
+        let spriteSize = NSRect(x: 100, y: 100, width: 64, height: 64)
+        spriteEngine = SpriteEngine(frame: spriteSize)
+
+        let contentView = NSView(frame: mascotWindow!.frame)
+        contentView.wantsLayer = true
+        contentView.addSubview(spriteEngine!.view)
+        mascotWindow?.contentView = contentView
+
+        // Load sprites
+        if let resourceURL = Bundle.module.url(forResource: "Resources", withExtension: nil) {
+            spriteEngine?.loadSprites(from: resourceURL.appendingPathComponent("sprites"))
+        }
+
+        // Setup movement
+        characterController = CharacterController(spriteEngine: spriteEngine!)
+        if let screen = NSScreen.main {
+            let preset = AreaPreset(rawValue: config.defaultArea) ?? .bottom
+            characterController?.setArea(preset, screenSize: screen.frame.size)
+        }
+        characterController?.start()
+
+        mascotWindow?.makeKeyAndOrderFront(nil)
+        print("Claude Speaki started")
+    }
+}
+
+let app = NSApplication.shared
+let delegate = AppDelegate()
+app.delegate = delegate
+app.run()
+```
+
+- [ ] **Step 4: Build and verify character moves**
+
+Run: `swift build && .build/debug/ClaudeSpeaki &`
+Expected: If a sprite exists in Resources/sprites/idle.png, it should appear and start moving along the bottom of the screen.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add Sources/ClaudeSpeaki/CharacterController.swift Sources/ClaudeSpeaki/App.swift
+git commit -m "feat: add character movement with area presets"
+```
+
+---
+
+### Task 7: Unix Socket Server
+
+**Files:**
+- Create: `Sources/ClaudeSpeaki/EventServer.swift`
+- Create: `Tests/ClaudeSpeakiTests/EventServerTests.swift`
+
+- [ ] **Step 1: Write the failing test**
+
+`Tests/ClaudeSpeakiTests/EventServerTests.swift`:
+```swift
+import XCTest
+@testable import ClaudeSpeaki
+
+final class EventServerTests: XCTestCase {
+    func testParseEvent() throws {
+        let json = """
+        {"event": "need_input", "session_id": "abc123", "pid": 12345}
+        """.data(using: .utf8)!
+
+        let event = try JSONDecoder().decode(SpeakiEvent.self, from: json)
+        XCTAssertEqual(event.event, .needInput)
+        XCTAssertEqual(event.sessionId, "abc123")
+        XCTAssertEqual(event.pid, 12345)
+    }
+
+    func testParseSessionStart() throws {
+        let json = """
+        {"event": "session_start", "session_id": "xyz"}
+        """.data(using: .utf8)!
+
+        let event = try JSONDecoder().decode(SpeakiEvent.self, from: json)
+        XCTAssertEqual(event.event, .sessionStart)
+        XCTAssertNil(event.pid)
+    }
+}
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `swift test --filter EventServerTests`
+Expected: FAIL — `SpeakiEvent` not found
+
+- [ ] **Step 3: Write implementation**
+
+`Sources/ClaudeSpeaki/EventServer.swift`:
+```swift
+import Foundation
+
+enum EventType: String, Codable {
+    case sessionStart = "session_start"
+    case needInput = "need_input"
+    case sessionEnd = "session_end"
+}
+
+struct SpeakiEvent: Codable {
+    let event: EventType
+    let sessionId: String
+    let pid: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case event
+        case sessionId = "session_id"
+        case pid
+    }
+}
+
+class EventServer {
+    static let socketPath = "/tmp/claude-speaki.sock"
+
+    private var serverFD: Int32 = -1
+    private var running = false
+    var onEvent: ((SpeakiEvent) -> Void)?
+
+    func start() {
+        unlink(EventServer.socketPath)
+
+        serverFD = socket(AF_UNIX, SOCK_STREAM, 0)
+        guard serverFD >= 0 else {
+            print("Failed to create socket")
+            return
+        }
+
+        var addr = sockaddr_un()
+        addr.sun_family = sa_family_t(AF_UNIX)
+        let pathBytes = EventServer.socketPath.utf8CString
+        withUnsafeMutablePointer(to: &addr.sun_path) { ptr in
+            let raw = UnsafeMutableRawPointer(ptr)
+            pathBytes.withUnsafeBufferPointer { buf in
+                raw.copyMemory(from: buf.baseAddress!, byteCount: buf.count)
+            }
+        }
+
+        let addrLen = socklen_t(MemoryLayout<sockaddr_un>.size)
+        let bindResult = withUnsafePointer(to: &addr) { ptr in
+            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockPtr in
+                bind(serverFD, sockPtr, addrLen)
+            }
+        }
+        guard bindResult == 0 else {
+            print("Failed to bind socket")
+            close(serverFD)
+            return
+        }
+
+        listen(serverFD, 5)
+        running = true
+
+        DispatchQueue.global(qos: .background).async { [weak self] in
+            self?.acceptLoop()
+        }
+        print("Event server listening on \(EventServer.socketPath)")
+    }
+
+    func stop() {
+        running = false
+        if serverFD >= 0 {
+            close(serverFD)
+            serverFD = -1
+        }
+        unlink(EventServer.socketPath)
+    }
+
+    private func acceptLoop() {
+        while running {
+            let clientFD = accept(serverFD, nil, nil)
+            guard clientFD >= 0 else { continue }
+            DispatchQueue.global().async { [weak self] in
+                self?.handleClient(fd: clientFD)
+            }
+        }
+    }
+
+    private func handleClient(fd: Int32) {
+        defer { close(fd) }
+
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        var accumulated = Data()
+
+        while true {
+            let bytesRead = read(fd, &buffer, buffer.count)
+            guard bytesRead > 0 else { break }
+            accumulated.append(contentsOf: buffer[..<bytesRead])
+
+            // Check for newline delimiter
+            if accumulated.contains(UInt8(ascii: "\n")) {
+                break
+            }
+        }
+
+        guard !accumulated.isEmpty else { return }
+
+        // Remove trailing newline
+        if accumulated.last == UInt8(ascii: "\n") {
+            accumulated.removeLast()
+        }
+
+        do {
+            let event = try JSONDecoder().decode(SpeakiEvent.self, from: accumulated)
+            DispatchQueue.main.async { [weak self] in
+                self?.onEvent?(event)
+            }
+        } catch {
+            print("Failed to parse event: \(error)")
+        }
+
+        // Send response
+        let response = Data("{\"ok\":true}\n".utf8)
+        response.withUnsafeBytes { ptr in
+            _ = write(fd, ptr.baseAddress!, response.count)
+        }
+    }
+}
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `swift test --filter EventServerTests`
+Expected: PASS
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add Sources/ClaudeSpeaki/EventServer.swift Tests/ClaudeSpeakiTests/EventServerTests.swift
+git commit -m "feat: add Unix socket event server"
+```
+
+---
+
+### Task 8: Sound Player
+
+**Files:**
+- Create: `Sources/ClaudeSpeaki/SoundPlayer.swift`
+
+- [ ] **Step 1: Create SoundPlayer**
+
+`Sources/ClaudeSpeaki/SoundPlayer.swift`:
+```swift
+import AppKit
+
+class SoundPlayer {
+    private var sounds: [EventType: NSSound] = [:]
+    var volume: Float = 1.0
+
+    func loadSounds(from directory: URL) {
+        let extensions = ["wav", "mp3", "aiff", "m4a"]
+        for eventType in EventType.allCases {
+            for ext in extensions {
+                let url = directory.appendingPathComponent("\(eventType.rawValue).\(ext)")
+                if let sound = NSSound(contentsOf: url, byReference: false) {
+                    sounds[eventType] = sound
+                    break
+                }
+            }
+        }
+    }
+
+    func play(for event: EventType) {
+        guard let sound = sounds[event] else { return }
+        sound.volume = volume
+        sound.play()
+    }
+}
+```
+
+Add `CaseIterable` to `EventType` in `EventServer.swift`:
+```swift
+enum EventType: String, Codable, CaseIterable {
+```
+
+- [ ] **Step 2: Build to verify**
+
+Run: `swift build`
+Expected: BUILD SUCCEEDED
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add Sources/ClaudeSpeaki/SoundPlayer.swift Sources/ClaudeSpeaki/EventServer.swift
+git commit -m "feat: add sound player for event-triggered audio"
+```
+
+---
+
+### Task 9: Speech Bubble
+
+**Files:**
+- Create: `Sources/ClaudeSpeaki/SpeechBubbleView.swift`
+
+- [ ] **Step 1: Create SpeechBubbleView**
+
+`Sources/ClaudeSpeaki/SpeechBubbleView.swift`:
+```swift
+import AppKit
+
+class SpeechBubbleView: NSView {
+    private let label: NSTextField
+    private let padding: CGFloat = 10
+    private let tailHeight: CGFloat = 8
+    private var dismissTimer: Timer?
+
+    init() {
+        label = NSTextField(labelWithString: "")
+        label.font = NSFont.systemFont(ofSize: 13)
+        label.textColor = .black
+        label.alignment = .center
+        label.maximumNumberOfLines = 3
+        label.lineBreakMode = .byWordWrapping
+
+        super.init(frame: .zero)
+        wantsLayer = true
+        addSubview(label)
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    func show(text: String, above anchorPoint: NSPoint, duration: TimeInterval = 4.0) {
+        label.stringValue = text
+        label.sizeToFit()
+
+        let bubbleWidth = label.frame.width + padding * 2
+        let bubbleHeight = label.frame.height + padding * 2 + tailHeight
+
+        let origin = NSPoint(
+            x: anchorPoint.x - bubbleWidth / 2,
+            y: anchorPoint.y + 4
+        )
+        frame = NSRect(x: origin.x, y: origin.y, width: bubbleWidth, height: bubbleHeight)
+        label.frame = NSRect(
+            x: padding,
+            y: tailHeight + padding,
+            width: label.frame.width,
+            height: label.frame.height
+        )
+
+        isHidden = false
+        needsDisplay = true
+
+        dismissTimer?.invalidate()
+        dismissTimer = Timer.scheduledTimer(withTimeInterval: duration, repeats: false) { [weak self] _ in
+            self?.dismiss()
+        }
+    }
+
+    func dismiss() {
+        dismissTimer?.invalidate()
+        isHidden = true
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        guard !isHidden else { return }
+
+        let bubbleRect = NSRect(
+            x: 0, y: tailHeight,
+            width: bounds.width, height: bounds.height - tailHeight
+        )
+
+        let path = NSBezierPath(roundedRect: bubbleRect, xRadius: 8, yRadius: 8)
+
+        // Tail triangle
+        let tailPath = NSBezierPath()
+        let midX = bounds.midX
+        tailPath.move(to: NSPoint(x: midX - 6, y: tailHeight))
+        tailPath.line(to: NSPoint(x: midX, y: 0))
+        tailPath.line(to: NSPoint(x: midX + 6, y: tailHeight))
+        tailPath.close()
+        path.append(tailPath)
+
+        NSColor.white.setFill()
+        path.fill()
+        NSColor.gray.withAlphaComponent(0.5).setStroke()
+        path.stroke()
+    }
+}
+```
+
+- [ ] **Step 2: Build to verify**
+
+Run: `swift build`
+Expected: BUILD SUCCEEDED
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add Sources/ClaudeSpeaki/SpeechBubbleView.swift
+git commit -m "feat: add speech bubble view"
+```
+
+---
+
+### Task 10: Event Manager (wire everything together)
+
+**Files:**
+- Create: `Sources/ClaudeSpeaki/EventManager.swift`
+- Modify: `Sources/ClaudeSpeaki/App.swift`
+
+- [ ] **Step 1: Create EventManager**
+
+`Sources/ClaudeSpeaki/EventManager.swift`:
+```swift
+import Foundation
+
+class EventManager {
+    private let characterController: CharacterController
+    private let soundPlayer: SoundPlayer
+    private let speechBubble: SpeechBubbleView
+    private let spriteEngine: SpriteEngine
+    private let config: SpeakiConfig
+
+    // Track active sessions for PID monitoring
+    private var activeSessions: [String: Int] = [:] // session_id → pid
+    private var pidCheckTimer: Timer?
+
+    init(
+        characterController: CharacterController,
+        soundPlayer: SoundPlayer,
+        speechBubble: SpeechBubbleView,
+        spriteEngine: SpriteEngine,
+        config: SpeakiConfig
+    ) {
+        self.characterController = characterController
+        self.soundPlayer = soundPlayer
+        self.speechBubble = speechBubble
+        self.spriteEngine = spriteEngine
+        self.config = config
+    }
+
+    func handleEvent(_ event: SpeakiEvent) {
+        switch event.event {
+        case .sessionStart:
+            if let pid = event.pid {
+                activeSessions[event.sessionId] = pid
+            }
+            react(to: event.event)
+
+        case .needInput:
+            react(to: event.event)
+
+        case .sessionEnd:
+            activeSessions.removeValue(forKey: event.sessionId)
+            react(to: event.event)
+        }
+    }
+
+    private func react(to eventType: EventType) {
+        // Trigger alert animation
+        characterController.triggerAlert()
+
+        // Play sound
+        soundPlayer.play(for: eventType)
+
+        // Show speech bubble
+        let speech: String
+        switch eventType {
+        case .sessionStart: speech = config.speeches.sessionStart
+        case .needInput: speech = config.speeches.needInput
+        case .sessionEnd: speech = config.speeches.sessionEnd
+        }
+
+        let spritePos = spriteEngine.position
+        let aboveSprite = NSPoint(
+            x: spritePos.x + spriteEngine.size.width / 2,
+            y: spritePos.y + spriteEngine.size.height
+        )
+        speechBubble.show(text: speech, above: aboveSprite)
+    }
+
+    // PID monitoring for unexpected session termination
+    func startPIDMonitoring() {
+        pidCheckTimer = Timer.scheduledTimer(withTimeInterval: 10.0, repeats: true) { [weak self] _ in
+            self?.checkActiveSessions()
+        }
+    }
+
+    func stopPIDMonitoring() {
+        pidCheckTimer?.invalidate()
+        pidCheckTimer = nil
+    }
+
+    private func checkActiveSessions() {
+        for (sessionId, pid) in activeSessions {
+            if kill(Int32(pid), 0) != 0 {
+                // Process is dead — treat as session end
+                activeSessions.removeValue(forKey: sessionId)
+                react(to: .sessionEnd)
+            }
+        }
+    }
+}
+```
+
+- [ ] **Step 2: Update App.swift — final wiring**
+
+`Sources/ClaudeSpeaki/App.swift`:
+```swift
+import AppKit
+
+class AppDelegate: NSObject, NSApplicationDelegate {
+    var mascotWindow: MascotWindow?
+    var spriteEngine: SpriteEngine?
+    var characterController: CharacterController?
+    var eventServer: EventServer?
+    var eventManager: EventManager?
+    var soundPlayer: SoundPlayer?
+    var speechBubble: SpeechBubbleView?
+    var config: SpeakiConfig = .default
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(.accessory)
+
+        // Load config
+        if let configURL = Bundle.module.url(forResource: "Resources", withExtension: nil)?
+            .appendingPathComponent("config.json") {
+            config = SpeakiConfig.load(from: configURL)
+        }
+
+        // Setup window
+        mascotWindow = MascotWindow()
+
+        let contentView = NSView(frame: mascotWindow!.frame)
+        contentView.wantsLayer = true
+
+        // Setup sprite
+        let spriteSize = NSRect(x: 100, y: 100, width: 64, height: 64)
+        spriteEngine = SpriteEngine(frame: spriteSize)
+        contentView.addSubview(spriteEngine!.view)
+
+        // Setup speech bubble
+        speechBubble = SpeechBubbleView()
+        speechBubble?.isHidden = true
+        contentView.addSubview(speechBubble!)
+
+        mascotWindow?.contentView = contentView
+
+        // Load resources
+        if let resourceURL = Bundle.module.url(forResource: "Resources", withExtension: nil) {
+            spriteEngine?.loadSprites(from: resourceURL.appendingPathComponent("sprites"))
+
+            soundPlayer = SoundPlayer()
+            soundPlayer?.loadSounds(from: resourceURL.appendingPathComponent("sounds"))
+        }
+
+        // Setup movement
+        characterController = CharacterController(spriteEngine: spriteEngine!)
+        if let screen = NSScreen.main {
+            let preset = AreaPreset(rawValue: config.defaultArea) ?? .bottom
+            characterController?.setArea(preset, screenSize: screen.frame.size)
+        }
+        characterController?.start()
+
+        // Setup event manager
+        eventManager = EventManager(
+            characterController: characterController!,
+            soundPlayer: soundPlayer ?? SoundPlayer(),
+            speechBubble: speechBubble!,
+            spriteEngine: spriteEngine!,
+            config: config
+        )
+        eventManager?.startPIDMonitoring()
+
+        // Start socket server
+        eventServer = EventServer()
+        eventServer?.onEvent = { [weak self] event in
+            self?.eventManager?.handleEvent(event)
+        }
+        eventServer?.start()
+
+        mascotWindow?.makeKeyAndOrderFront(nil)
+        print("Claude Speaki started")
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        characterController?.stop()
+        eventServer?.stop()
+        eventManager?.stopPIDMonitoring()
+    }
+}
+
+let app = NSApplication.shared
+let delegate = AppDelegate()
+app.delegate = delegate
+app.run()
+```
+
+- [ ] **Step 3: Build and verify**
+
+Run: `swift build`
+Expected: BUILD SUCCEEDED
+
+- [ ] **Step 4: Integration test — send event via socket**
+
+Run the app, then from another terminal:
+```bash
+python3 -c "
+import socket, json
+s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+s.connect('/tmp/claude-speaki.sock')
+s.send(json.dumps({'event': 'need_input', 'session_id': 'test'}).encode() + b'\n')
+print(s.recv(1024))
+s.close()
+"
+```
+Expected: App receives event, character reacts (alert state + speech bubble). Python prints `b'{"ok":true}\n'`.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add Sources/ClaudeSpeaki/EventManager.swift Sources/ClaudeSpeaki/App.swift
+git commit -m "feat: wire event manager — connect socket events to character reactions"
+```
+
+---
+
+### Task 11: Menu Bar Controller
+
+**Files:**
+- Create: `Sources/ClaudeSpeaki/MenuBarController.swift`
+- Modify: `Sources/ClaudeSpeaki/App.swift`
+
+- [ ] **Step 1: Create MenuBarController**
+
+`Sources/ClaudeSpeaki/MenuBarController.swift`:
+```swift
+import AppKit
+import SwiftUI
+
+class MenuBarController {
+    private var statusItem: NSStatusItem?
+    private var popover: NSPopover?
+
+    var onAreaChanged: ((AreaPreset) -> Void)?
+    var onVolumeChanged: ((Float) -> Void)?
+    var currentPreset: AreaPreset = .bottom
+
+    func setup() {
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        statusItem?.button?.title = "🐾"
+        statusItem?.button?.action = #selector(togglePopover)
+        statusItem?.button?.target = self
+
+        let view = MenuBarPopoverView(controller: self)
+        popover = NSPopover()
+        popover?.contentSize = NSSize(width: 220, height: 280)
+        popover?.behavior = .transient
+        popover?.contentViewController = NSHostingController(rootView: view)
+    }
+
+    @objc private func togglePopover() {
+        guard let button = statusItem?.button else { return }
+        if popover?.isShown == true {
+            popover?.performClose(nil)
+        } else {
+            popover?.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        }
+    }
+}
+
+extension MenuBarController: NSObjectProtocol {
+    // Required for @objc selectors
+    static func `self`() -> Self { fatalError() }
+}
+
+struct MenuBarPopoverView: View {
+    let controller: MenuBarController
+    @State private var selectedPreset: AreaPreset = .bottom
+    @State private var volume: Double = 1.0
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Claude Speaki")
+                .font(.headline)
+
+            Divider()
+
+            Text("Area").font(.subheadline.bold())
+            ForEach(AreaPreset.allCases, id: \.self) { preset in
+                Button(action: {
+                    selectedPreset = preset
+                    controller.onAreaChanged?(preset)
+                }) {
+                    HStack {
+                        Image(systemName: selectedPreset == preset ? "checkmark.circle.fill" : "circle")
+                        Text(preset.displayName)
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+
+            Divider()
+
+            HStack {
+                Text("Volume")
+                Slider(value: $volume, in: 0...1) { _ in
+                    controller.onVolumeChanged?(Float(volume))
+                }
+            }
+
+            Divider()
+
+            Button("Quit") {
+                NSApp.terminate(nil)
+            }
+        }
+        .padding()
+        .onAppear {
+            selectedPreset = controller.currentPreset
+        }
+    }
+}
+```
+
+- [ ] **Step 2: Fix MenuBarController to be NSObject subclass**
+
+The `@objc` selector requires `NSObject`. Update the class declaration:
+```swift
+class MenuBarController: NSObject {
+```
+
+Remove the `NSObjectProtocol` extension.
+
+- [ ] **Step 3: Wire into App.swift**
+
+Add to `AppDelegate`:
+```swift
+    var menuBarController: MenuBarController?
+```
+
+Add to `applicationDidFinishLaunching`, after event server setup:
+```swift
+        // Setup menu bar
+        menuBarController = MenuBarController()
+        menuBarController?.currentPreset = AreaPreset(rawValue: config.defaultArea) ?? .bottom
+        menuBarController?.onAreaChanged = { [weak self] preset in
+            if let screen = NSScreen.main {
+                self?.characterController?.setArea(preset, screenSize: screen.frame.size)
+            }
+        }
+        menuBarController?.onVolumeChanged = { [weak self] volume in
+            self?.soundPlayer?.volume = volume
+        }
+        menuBarController?.setup()
+```
+
+- [ ] **Step 4: Build and verify**
+
+Run: `swift build && .build/debug/ClaudeSpeaki &`
+Expected: Menu bar shows a paw icon. Clicking it shows a popover with area presets, volume slider, and quit button.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add Sources/ClaudeSpeaki/MenuBarController.swift Sources/ClaudeSpeaki/App.swift
+git commit -m "feat: add menu bar controller with settings popover"
+```
+
+---
+
+### Task 12: Hook Scripts + Plugin Manifest
+
+**Files:**
+- Create: `hooks/hooks.json`
+- Create: `hooks/scripts/notify.py`
+- Create: `.claude-plugin/plugin.json`
+- Create: `README.md`
+
+- [ ] **Step 1: Create notify.py**
+
+`hooks/scripts/notify.py`:
+```python
+"""Claude Code hook script — sends events to Claude Speaki app via Unix socket."""
+
+import json
+import os
+import socket
+import sys
+
+SOCKET_PATH = "/tmp/claude-speaki.sock"
+
+
+def send_event(event_type: str, session_id: str, pid: int | None = None):
+    """Send an event to the Speaki app. Fail silently if app isn't running."""
+    try:
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.settimeout(2)
+        sock.connect(SOCKET_PATH)
+        payload = {"event": event_type, "session_id": session_id}
+        if pid is not None:
+            payload["pid"] = pid
+        sock.send(json.dumps(payload).encode() + b"\n")
+        sock.recv(1024)  # wait for ack
+        sock.close()
+    except (ConnectionRefusedError, FileNotFoundError, OSError):
+        pass  # App not running — silent fail
+
+
+def main():
+    hook_input = json.load(sys.stdin)
+    session_id = hook_input.get("session_id", "unknown")
+    hook_event = hook_input.get("hook_event_name", "")
+
+    if hook_event == "SessionStart":
+        pid = os.getppid()
+        send_event("session_start", session_id, pid)
+
+    elif hook_event == "Stop":
+        send_event("session_end", session_id)
+
+    elif hook_event == "Notification":
+        send_event("need_input", session_id)
+
+    # Always allow — we're just notifying, not gating
+    print(json.dumps({"continue": True}))
+
+
+if __name__ == "__main__":
+    main()
+```
+
+- [ ] **Step 2: Create hooks.json**
+
+`hooks/hooks.json`:
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/scripts/notify.py",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/scripts/notify.py",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/hooks/scripts/notify.py",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+- [ ] **Step 3: Create plugin.json**
+
+`.claude-plugin/plugin.json`:
+```json
+{
+  "name": "claude-speaki",
+  "version": "0.1.0",
+  "description": "Desktop mascot that reacts to Claude Code session events with animations and sounds",
+  "author": {
+    "name": "jhseo"
+  },
+  "license": "MIT",
+  "keywords": ["mascot", "desktop", "notification", "hooks"]
+}
+```
+
+- [ ] **Step 4: Create README.md**
+
+`README.md`:
+```markdown
+# Claude Speaki
+
+Desktop mascot app for macOS that reacts to Claude Code session events.
+
+A sprite character roams your screen and alerts you with animations,
+speech bubbles, and sounds when Claude Code needs your attention.
+
+## Requirements
+
+- macOS 13+
+- Swift 5.9+ / Xcode 15+
+- Claude Code with plugin support
+
+## Setup
+
+### 1. Build the app
+
+\`\`\`bash
+swift build -c release
+\`\`\`
+
+### 2. Install as Claude Code plugin
+
+\`\`\`bash
+claude plugin add /path/to/claude-speaki
+\`\`\`
+
+### 3. Run the app
+
+\`\`\`bash
+.build/release/ClaudeSpeaki
+\`\`\`
+
+The mascot will appear on your screen and start listening for events.
+
+## Customization
+
+### Sprites
+
+Place your sprite files in `Sources/Resources/sprites/`:
+
+| File | Purpose | Formats |
+|------|---------|---------|
+| `idle.gif` | Default idle animation | GIF, APNG, PNG |
+| `walk.gif` | Walking animation | GIF, APNG, PNG |
+| `alert.gif` | Alert/notification reaction | GIF, APNG, PNG |
+
+Only `idle` is required. Missing sprites fall back to `idle`.
+
+### Sounds
+
+Place sound files in `Sources/Resources/sounds/`:
+
+| File | Trigger | Formats |
+|------|---------|---------|
+| `session_start.wav` | Claude Code session starts | WAV, MP3, AIFF, M4A |
+| `need_input.wav` | Claude needs your input | WAV, MP3, AIFF, M4A |
+| `session_end.wav` | Session ends | WAV, MP3, AIFF, M4A |
+
+All sounds are optional.
+
+### Speech Bubbles
+
+Edit `Sources/Resources/config.json`:
+
+\`\`\`json
+{
+  "default_area": "bottom",
+  "speeches": {
+    "session_start": "Let's go!",
+    "need_input": "Hey! Need your input!",
+    "session_end": "See you later!"
+  }
+}
+\`\`\`
+
+### Area Presets
+
+Choose where the mascot roams via the menu bar icon:
+
+- **Full Screen** — entire screen
+- **Bottom** — bottom edge
+- **Top** — top edge
+- **Menu Bar** — near the menu bar
+- **Right 1/4** — right quarter
+- **Left 1/4** — left quarter
+
+## How It Works
+
+1. The app opens a Unix socket at `/tmp/claude-speaki.sock`
+2. Claude Code hooks (installed via plugin) send JSON events to this socket
+3. The app reacts with character animations, speech bubbles, and sounds
+4. If the app isn't running, hooks silently fail (no impact on Claude Code)
+\`\`\`
+```
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add hooks/ .claude-plugin/plugin.json README.md
+git commit -m "feat: add Claude Code plugin hooks and README"
+```
+
+---
+
+### Task 13: End-to-End Verification
+
+- [ ] **Step 1: Full build**
+
+```bash
+swift build
+```
+Expected: BUILD SUCCEEDED
+
+- [ ] **Step 2: Run all tests**
+
+```bash
+swift test
+```
+Expected: All tests pass
+
+- [ ] **Step 3: Manual integration test**
+
+Terminal 1:
+```bash
+.build/debug/ClaudeSpeaki
+```
+
+Terminal 2:
+```bash
+# Test session start
+echo '{"event":"session_start","session_id":"test1","pid":$$}' | python3 -c "
+import socket, sys
+s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+s.connect('/tmp/claude-speaki.sock')
+s.send(sys.stdin.buffer.read())
+s.send(b'\n')
+print(s.recv(1024))
+s.close()
+"
+
+# Test need input
+echo '{"event":"need_input","session_id":"test1"}' | python3 -c "
+import socket, sys
+s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+s.connect('/tmp/claude-speaki.sock')
+s.send(sys.stdin.buffer.read())
+s.send(b'\n')
+print(s.recv(1024))
+s.close()
+"
+```
+
+Expected: Character shows alert animation + speech bubble for each event.
+
+- [ ] **Step 4: Test hook script**
+
+```bash
+echo '{"session_id":"test","hook_event_name":"Notification"}' | python3 hooks/scripts/notify.py
+```
+Expected: Prints `{"continue": true}`, character reacts if app is running.
+
+- [ ] **Step 5: Final commit**
+
+```bash
+git add -A
+git commit -m "chore: end-to-end verification complete"
+```
