@@ -1,9 +1,15 @@
 import AppKit
 
 class AppDelegate: NSObject, NSApplicationDelegate {
+    var mascotWindow: MascotWindow?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
-        print("Claude Speaki started")
+
+        mascotWindow = MascotWindow()
+        mascotWindow?.makeKeyAndOrderFront(nil)
+
+        print("Claude Speaki started — overlay window active")
     }
 }
 
