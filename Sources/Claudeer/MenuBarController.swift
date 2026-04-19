@@ -39,7 +39,7 @@ struct MenuBarPopoverView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Claude Speaki")
+            Text("Claudeer")
                 .font(.headline)
 
             Divider()

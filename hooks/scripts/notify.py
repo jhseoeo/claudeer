@@ -1,11 +1,11 @@
-"""Claude Code hook script — sends events to Claude Speaki app via Unix socket."""
+"""Claude Code hook script — sends events to Claudeer app via Unix socket."""
 
 import json
 import os
 import socket
 import sys
 
-SOCKET_PATH = "/tmp/claude-speaki.sock"
+SOCKET_PATH = "/tmp/claudeer.sock"
 
 
 def send_event(event_type, session_id, pid=None):

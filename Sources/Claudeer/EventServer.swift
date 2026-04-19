@@ -19,7 +19,7 @@ struct SpeakiEvent: Codable {
 }
 
 class EventServer {
-    static let socketPath = "/tmp/claude-speaki.sock"
+    static let socketPath = "/tmp/claudeer.sock"
 
     private let lock = NSLock()
     private var _serverFD: Int32 = -1

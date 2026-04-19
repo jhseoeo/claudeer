@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Claude Speaki** is a macOS desktop mascot app + Claude Code plugin. A user-customized sprite character roams the screen and reacts to Claude Code session events (start, need input, end) with animations, speech bubbles, and sounds.
+**Claudeer** is a macOS desktop mascot app + Claude Code plugin. A user-customized sprite character roams the screen and reacts to Claude Code session events (start, need input, end) with animations, speech bubbles, and sounds.
 
 ## Build & Test
 
@@ -13,17 +13,17 @@ swift build                     # Debug build
 swift build -c release          # Release build
 swift test                      # Run all tests (requires Xcode, not just CLT)
 swift test --filter ConfigTests # Run a single test suite
-.build/debug/ClaudeSpeaki       # Run debug build
+.build/debug/Claudeer       # Run debug build
 ```
 
 Manual socket test (while app is running):
 ```bash
-python3 -c "import socket,json; s=socket.socket(socket.AF_UNIX); s.connect('/tmp/claude-speaki.sock'); s.send(json.dumps({'event':'need_input','session_id':'test'}).encode()+b'\n'); print(s.recv(1024)); s.close()"
+python3 -c "import socket,json; s=socket.socket(socket.AF_UNIX); s.connect('/tmp/claudeer.sock'); s.send(json.dumps({'event':'need_input','session_id':'test'}).encode()+b'\n'); print(s.recv(1024)); s.close()"
 ```
 
 Test as Claude Code plugin:
 ```bash
-claude plugin add /path/to/claude-speaki
+claude plugin add /path/to/claudeer
 ```
 
 ## Architecture
@@ -33,7 +33,7 @@ The app acts as its own daemon — no separate server process.
 ```
 Claude Code Hooks (Python) ──(Unix Socket)──> Swift App
     notify.py                                    │
-    SessionStart/Stop/Notification          EventServer (POSIX socket on /tmp/claude-speaki.sock)
+    SessionStart/Stop/Notification          EventServer (POSIX socket on /tmp/claudeer.sock)
                                                  │
                                            EventManager
                                             │    │    │
@@ -56,7 +56,7 @@ Claude Code Hooks (Python) ──(Unix Socket)──> Swift App
 - SwiftUI is only used for the menu bar popover (`MenuBarController`); everything else is AppKit
 - Sprite states map directly to filenames: `idle.gif`, `walk.gif`, `alert.gif`
 - `EventType` raw values match JSON event names and sound filenames: `session_start`, `need_input`, `session_end`
-- Resources live in `Sources/ClaudeSpeaki/Resources/` and are accessed via `Bundle.module`
+- Resources live in `Sources/Claudeer/Resources/` and are accessed via `Bundle.module`
 
 ## Plugin Structure
 
@@ -70,7 +70,7 @@ hooks/scripts/notify.py        # Hook script — uses ${CLAUDE_PLUGIN_ROOT} for 
 
 - `main.swift` must keep that filename — SPM requires it for top-level code
 - `swift test` requires full Xcode.app installation, not just Command Line Tools
-- Socket path is hardcoded to `/tmp/claude-speaki.sock` in both `EventServer.swift` and `notify.py` — change both if modifying
+- Socket path is hardcoded to `/tmp/claudeer.sock` in both `EventServer.swift` and `notify.py` — change both if modifying
 - `MascotWindow.ignoresMouseEvents = true` makes the entire overlay click-through; partial hit-testing would require overriding `NSView.hitTest(_:)`
 - `CharacterController` freezes movement during alert state (`isAlerted` flag) so speech bubbles stay aligned with the character
-- `Sources/ClaudeSpeaki/Resources/sounds/` directory doesn't exist by default — users must create it and add their own sound files
+- `Sources/Claudeer/Resources/sounds/` directory doesn't exist by default — users must create it and add their own sound files

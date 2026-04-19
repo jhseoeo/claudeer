@@ -2,14 +2,14 @@
 import PackageDescription
 
 let package = Package(
-    name: "ClaudeSpeaki",
+    name: "Claudeer",
     platforms: [
         .macOS(.v13)
     ],
     targets: [
         .executableTarget(
-            name: "ClaudeSpeaki",
-            path: "Sources/ClaudeSpeaki",
+            name: "Claudeer",
+            path: "Sources/Claudeer",
             resources: [
                 .copy("Resources")
             ],
@@ -19,9 +19,9 @@ let package = Package(
             ]
         ),
         .testTarget(
-            name: "ClaudeSpeakiTests",
-            dependencies: ["ClaudeSpeaki"],
-            path: "Tests/ClaudeSpeakiTests"
+            name: "ClaudeerTests",
+            dependencies: ["Claudeer"],
+            path: "Tests/ClaudeerTests"
         ),
     ]
 )

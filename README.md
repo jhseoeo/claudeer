@@ -1,4 +1,4 @@
-# Claude Speaki
+# Claudeer
 
 Desktop mascot app for macOS that reacts to Claude Code session events.
 
@@ -17,7 +17,7 @@ speech bubbles, and sounds when Claude Code needs your attention.
 
 리소스는 빌드 시점에 번들에 포함되므로, **빌드 전에** 배치해야 합니다.
 
-**Sprites** — `Sources/ClaudeSpeaki/Resources/sprites/`에 배치:
+**Sprites** — `Sources/Claudeer/Resources/sprites/`에 배치:
 
 | File | Purpose | Formats |
 |------|---------|---------|
@@ -27,10 +27,10 @@ speech bubbles, and sounds when Claude Code needs your attention.
 
 `idle`만 필수. 나머지는 없으면 `idle`로 대체됩니다.
 
-**Sounds** — `Sources/ClaudeSpeaki/Resources/sounds/`에 배치 (디렉토리 직접 생성):
+**Sounds** — `Sources/Claudeer/Resources/sounds/`에 배치 (디렉토리 직접 생성):
 
 ```bash
-mkdir -p Sources/ClaudeSpeaki/Resources/sounds
+mkdir -p Sources/Claudeer/Resources/sounds
 ```
 
 | File | Trigger | Formats |
@@ -41,7 +41,7 @@ mkdir -p Sources/ClaudeSpeaki/Resources/sounds
 
 사운드는 전부 선택사항입니다. 없으면 소리 없이 동작합니다.
 
-**Speech Bubbles** — `Sources/ClaudeSpeaki/Resources/config.json` 편집:
+**Speech Bubbles** — `Sources/Claudeer/Resources/config.json` 편집:
 
 ```json
 {
@@ -65,13 +65,13 @@ swift build -c release
 ### 3. Install as Claude Code plugin
 
 ```bash
-claude plugin add /path/to/claude-speaki
+claude plugin add /path/to/claudeer
 ```
 
 ### 4. Run the app
 
 ```bash
-.build/release/ClaudeSpeaki
+.build/release/Claudeer
 ```
 
 The mascot will appear on your screen and start listening for events.
@@ -89,7 +89,7 @@ Choose where the mascot roams via the menu bar icon (🐾):
 
 ## How It Works
 
-1. The app opens a Unix socket at `/tmp/claude-speaki.sock`
+1. The app opens a Unix socket at `/tmp/claudeer.sock`
 2. Claude Code hooks (installed via plugin) send JSON events to this socket
 3. The app reacts with character animations, speech bubbles, and sounds
 4. If the app isn't running, hooks silently fail (no impact on Claude Code)

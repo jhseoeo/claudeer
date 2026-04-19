@@ -85,7 +85,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menuBarController?.setup()
 
         mascotWindow?.makeKeyAndOrderFront(nil)
-        print("Claude Speaki started")
+        print("Claudeer started")
     }
 
     func applicationWillTerminate(_ notification: Notification) {

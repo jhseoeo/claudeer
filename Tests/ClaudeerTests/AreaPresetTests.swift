@@ -1,5 +1,5 @@
 import XCTest
-@testable import ClaudeSpeaki
+@testable import Claudeer
 
 final class AreaPresetTests: XCTestCase {
     let screenSize = CGSize(width: 1920, height: 1080)

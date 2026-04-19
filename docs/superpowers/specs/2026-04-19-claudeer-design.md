@@ -1,4 +1,4 @@
-# Claude Speaki - Desktop Mascot App Design Spec
+# Claudeer - Desktop Mascot App Design Spec
 
 ## Overview
 
@@ -37,7 +37,7 @@ Claude Code Hook Scripts (Python) ──(Unix Socket)──> macOS App
 ## Project Structure (Claude Code Plugin)
 
 ```
-claude-speaki/
+claudeer/
   .claude-plugin/plugin.json    # 플러그인 매니페스트
   hooks/                        # SessionStart, Stop, Notification 훅 (Python)
   skills/                       # 설정 가이드 등
@@ -133,7 +133,7 @@ Claude Code 훅에서 앱으로 이벤트를 보내는 경량 스크립트:
 ```python
 import socket, json
 sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-sock.connect("/tmp/claude-speaki.sock")
+sock.connect("/tmp/claudeer.sock")
 sock.send(json.dumps({"event": "need_input", "session_id": "abc123"}).encode() + b"\n")
 sock.close()
 ```
@@ -142,7 +142,7 @@ sock.close()
 
 ## Socket Protocol
 
-소켓 경로: `/tmp/claude-speaki.sock`
+소켓 경로: `/tmp/claudeer.sock`
 
 요청 (hook -> app):
 ```json

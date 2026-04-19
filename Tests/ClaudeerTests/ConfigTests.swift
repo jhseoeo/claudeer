@@ -1,5 +1,5 @@
 import XCTest
-@testable import ClaudeSpeaki
+@testable import Claudeer
 
 final class ConfigTests: XCTestCase {
     func testParseConfig() throws {

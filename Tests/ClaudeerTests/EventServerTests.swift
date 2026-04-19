@@ -1,5 +1,5 @@
 import XCTest
-@testable import ClaudeSpeaki
+@testable import Claudeer
 
 final class EventServerTests: XCTestCase {
     func testParseEvent() throws {
