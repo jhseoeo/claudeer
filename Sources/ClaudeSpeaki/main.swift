@@ -9,6 +9,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var soundPlayer: SoundPlayer?
     var speechBubble: SpeechBubbleView?
     var config: SpeakiConfig = .default
+    var menuBarController: MenuBarController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -69,6 +70,19 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self?.eventManager?.handleEvent(event)
         }
         eventServer?.start()
+
+        // Setup menu bar
+        menuBarController = MenuBarController()
+        menuBarController?.currentPreset = AreaPreset(rawValue: config.defaultArea) ?? .bottom
+        menuBarController?.onAreaChanged = { [weak self] preset in
+            if let screen = NSScreen.main {
+                self?.characterController?.setArea(preset, screenSize: screen.frame.size)
+            }
+        }
+        menuBarController?.onVolumeChanged = { [weak self] volume in
+            self?.soundPlayer?.volume = volume
+        }
+        menuBarController?.setup()
 
         mascotWindow?.makeKeyAndOrderFront(nil)
         print("Claude Speaki started")
