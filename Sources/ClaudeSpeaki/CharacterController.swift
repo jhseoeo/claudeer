@@ -8,6 +8,7 @@ class CharacterController {
     private var speed: CGFloat = 2.0
 
     private var isMoving = false
+    private var isAlerted = false
     private var idleTimer: TimeInterval = 0
     private var idleDuration: TimeInterval = 0
 
@@ -34,6 +35,7 @@ class CharacterController {
     }
 
     private func tick() {
+        if isAlerted { return }
         if isMoving {
             moveTowardTarget()
         } else {
@@ -99,7 +101,9 @@ class CharacterController {
         alertWorkItem?.cancel()
         spriteEngine.setState(.alert)
         isMoving = false
+        isAlerted = true
         let workItem = DispatchWorkItem { [weak self] in
+            self?.isAlerted = false
             self?.spriteEngine.setState(.idle)
             self?.pickNewIdleDuration()
         }

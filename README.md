@@ -13,43 +13,25 @@ speech bubbles, and sounds when Claude Code needs your attention.
 
 ## Setup
 
-### 1. Build the app
+### 1. Customize resources
 
-```bash
-swift build -c release
-```
+리소스는 빌드 시점에 번들에 포함되므로, **빌드 전에** 배치해야 합니다.
 
-### 2. Install as Claude Code plugin
-
-```bash
-claude plugin add /path/to/claude-speaki
-```
-
-### 3. Run the app
-
-```bash
-.build/release/ClaudeSpeaki
-```
-
-The mascot will appear on your screen and start listening for events.
-
-## Customization
-
-### Sprites
-
-Place your sprite files in `Sources/ClaudeSpeaki/Resources/sprites/`:
+**Sprites** — `Sources/ClaudeSpeaki/Resources/sprites/`에 배치:
 
 | File | Purpose | Formats |
 |------|---------|---------|
-| `idle.gif` | Default idle animation | GIF, APNG, PNG |
+| `idle.gif` | Default idle animation (필수) | GIF, APNG, PNG |
 | `walk.gif` | Walking animation | GIF, APNG, PNG |
 | `alert.gif` | Alert/notification reaction | GIF, APNG, PNG |
 
-Only `idle` is required. Missing sprites fall back to `idle`.
+`idle`만 필수. 나머지는 없으면 `idle`로 대체됩니다.
 
-### Sounds
+**Sounds** — `Sources/ClaudeSpeaki/Resources/sounds/`에 배치 (디렉토리 직접 생성):
 
-Place sound files in `Sources/ClaudeSpeaki/Resources/sounds/`:
+```bash
+mkdir -p Sources/ClaudeSpeaki/Resources/sounds
+```
 
 | File | Trigger | Formats |
 |------|---------|---------|
@@ -57,11 +39,9 @@ Place sound files in `Sources/ClaudeSpeaki/Resources/sounds/`:
 | `need_input.wav` | Claude needs your input | WAV, MP3, AIFF, M4A |
 | `session_end.wav` | Session ends | WAV, MP3, AIFF, M4A |
 
-All sounds are optional.
+사운드는 전부 선택사항입니다. 없으면 소리 없이 동작합니다.
 
-### Speech Bubbles
-
-Edit `Sources/ClaudeSpeaki/Resources/config.json`:
+**Speech Bubbles** — `Sources/ClaudeSpeaki/Resources/config.json` 편집:
 
 ```json
 {
@@ -74,12 +54,34 @@ Edit `Sources/ClaudeSpeaki/Resources/config.json`:
 }
 ```
 
+### 2. Build
+
+```bash
+swift build -c release
+```
+
+리소스를 변경한 경우 다시 빌드해야 반영됩니다.
+
+### 3. Install as Claude Code plugin
+
+```bash
+claude plugin add /path/to/claude-speaki
+```
+
+### 4. Run the app
+
+```bash
+.build/release/ClaudeSpeaki
+```
+
+The mascot will appear on your screen and start listening for events.
+
 ### Area Presets
 
-Choose where the mascot roams via the menu bar icon:
+Choose where the mascot roams via the menu bar icon (🐾):
 
 - **Full Screen** — entire screen
-- **Bottom** — bottom edge
+- **Bottom** — bottom edge (default)
 - **Top** — top edge
 - **Menu Bar** — near the menu bar
 - **Right 1/4** — right quarter
