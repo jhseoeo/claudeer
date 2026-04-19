@@ -93,12 +93,17 @@ class CharacterController {
         idleDuration = Double.random(in: 2.0...6.0)
     }
 
+    private var alertWorkItem: DispatchWorkItem?
+
     func triggerAlert() {
+        alertWorkItem?.cancel()
         spriteEngine.setState(.alert)
         isMoving = false
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
+        let workItem = DispatchWorkItem { [weak self] in
             self?.spriteEngine.setState(.idle)
             self?.pickNewIdleDuration()
         }
+        alertWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0, execute: workItem)
     }
 }

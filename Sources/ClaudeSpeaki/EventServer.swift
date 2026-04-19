@@ -21,18 +21,30 @@ struct SpeakiEvent: Codable {
 class EventServer {
     static let socketPath = "/tmp/claude-speaki.sock"
 
-    private var serverFD: Int32 = -1
-    private var running = false
+    private let lock = NSLock()
+    private var _serverFD: Int32 = -1
+    private var _running = false
     var onEvent: ((SpeakiEvent) -> Void)?
+
+    private var serverFD: Int32 {
+        get { lock.withLock { _serverFD } }
+        set { lock.withLock { _serverFD = newValue } }
+    }
+
+    private var running: Bool {
+        get { lock.withLock { _running } }
+        set { lock.withLock { _running = newValue } }
+    }
 
     func start() {
         unlink(EventServer.socketPath)
 
-        serverFD = socket(AF_UNIX, SOCK_STREAM, 0)
-        guard serverFD >= 0 else {
+        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+        guard fd >= 0 else {
             print("Failed to create socket")
             return
         }
+        serverFD = fd
 
         var addr = sockaddr_un()
         addr.sun_family = sa_family_t(AF_UNIX)
@@ -47,16 +59,16 @@ class EventServer {
         let addrLen = socklen_t(MemoryLayout<sockaddr_un>.size)
         let bindResult = withUnsafePointer(to: &addr) { ptr in
             ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockPtr in
-                bind(serverFD, sockPtr, addrLen)
+                bind(fd, sockPtr, addrLen)
             }
         }
         guard bindResult == 0 else {
             print("Failed to bind socket")
-            close(serverFD)
+            close(fd)
             return
         }
 
-        listen(serverFD, 5)
+        listen(fd, 5)
         running = true
 
         DispatchQueue.global(qos: .background).async { [weak self] in
@@ -67,17 +79,23 @@ class EventServer {
 
     func stop() {
         running = false
-        if serverFD >= 0 {
-            close(serverFD)
+        let fd = serverFD
+        if fd >= 0 {
             serverFD = -1
+            close(fd)
         }
         unlink(EventServer.socketPath)
     }
 
     private func acceptLoop() {
         while running {
-            let clientFD = accept(serverFD, nil, nil)
-            guard clientFD >= 0 else { continue }
+            let fd = serverFD
+            guard fd >= 0 else { break }
+            let clientFD = accept(fd, nil, nil)
+            guard clientFD >= 0 else {
+                if !running { break }
+                continue
+            }
             DispatchQueue.global().async { [weak self] in
                 self?.handleClient(fd: clientFD)
             }

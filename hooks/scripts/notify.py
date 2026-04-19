@@ -11,15 +11,14 @@ SOCKET_PATH = "/tmp/claude-speaki.sock"
 def send_event(event_type, session_id, pid=None):
     """Send an event to the Speaki app. Fail silently if app isn't running."""
     try:
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock.settimeout(2)
-        sock.connect(SOCKET_PATH)
-        payload = {"event": event_type, "session_id": session_id}
-        if pid is not None:
-            payload["pid"] = pid
-        sock.send(json.dumps(payload).encode() + b"\n")
-        sock.recv(1024)
-        sock.close()
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.settimeout(2)
+            sock.connect(SOCKET_PATH)
+            payload = {"event": event_type, "session_id": session_id}
+            if pid is not None:
+                payload["pid"] = pid
+            sock.send(json.dumps(payload).encode() + b"\n")
+            sock.recv(1024)
     except (ConnectionRefusedError, FileNotFoundError, OSError):
         pass
 
