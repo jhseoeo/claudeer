@@ -12,10 +12,17 @@ class MenuBarController: NSObject {
     var currentPreset: AreaPreset = .bottom
 
     func setup() {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        statusItem?.button?.title = "🐾"
-        statusItem?.button?.action = #selector(togglePopover)
-        statusItem?.button?.target = self
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        if let button = statusItem?.button {
+            if let image = NSImage(systemSymbolName: "pawprint.fill", accessibilityDescription: "Claudeer") {
+                image.isTemplate = true
+                button.image = image
+            } else {
+                button.title = "🐾"
+            }
+            button.action = #selector(togglePopover)
+            button.target = self
+        }
 
         let view = MenuBarPopoverView(controller: self)
         popover = NSPopover()
