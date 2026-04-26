@@ -6,3 +6,4 @@ DerivedData/
 .DS_Store
 temp/
 settings.local.json
+dist/
