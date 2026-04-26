@@ -15,15 +15,15 @@ struct PreferencesView: View {
             }
             .padding(20)
         }
-        .frame(minWidth: 480, minHeight: 560)
+        .frame(minWidth: 480, minHeight: 480)
     }
 
     private var spritesSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Sprites").font(.headline)
-            ForEach(SpriteState.allCases, id: \.self) { state in
+            ForEach(MascotState.allCases, id: \.self) { state in
                 AssetSlotRow(
-                    label: state.rawValue.capitalized,
+                    label: state.displayName,
                     currentURL: assetStore.currentSpriteURL(for: state),
                     onChoose: { chooseSprite(for: state) },
                     onClear: { assetStore.clearSprite(for: state) }
@@ -36,12 +36,12 @@ struct PreferencesView: View {
     private var soundsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Sounds").font(.headline)
-            ForEach(EventType.allCases, id: \.self) { event in
+            ForEach(MascotState.allCases, id: \.self) { state in
                 AssetSlotRow(
-                    label: eventLabel(event),
-                    currentURL: assetStore.currentSoundURL(for: event),
-                    onChoose: { chooseSound(for: event) },
-                    onClear: { assetStore.clearSound(for: event) }
+                    label: state.displayName,
+                    currentURL: assetStore.currentSoundURL(for: state),
+                    onChoose: { chooseSound(for: state) },
+                    onClear: { assetStore.clearSound(for: state) }
                 )
                 .id(assetStore.changeVersion)
             }
@@ -51,21 +51,13 @@ struct PreferencesView: View {
     private var speechesSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Speeches").font(.headline)
-            SpeechRow(assetStore: assetStore, event: .sessionStart, label: "Session Start")
-            SpeechRow(assetStore: assetStore, event: .needInput, label: "Need Input")
-            SpeechRow(assetStore: assetStore, event: .sessionEnd, label: "Session End")
+            ForEach(MascotState.allCases, id: \.self) { state in
+                SpeechRow(assetStore: assetStore, state: state, label: state.displayName)
+            }
         }
     }
 
-    private func eventLabel(_ event: EventType) -> String {
-        switch event {
-        case .sessionStart: return "Session Start"
-        case .needInput: return "Need Input"
-        case .sessionEnd: return "Session End"
-        }
-    }
-
-    private func chooseSprite(for state: SpriteState) {
+    private func chooseSprite(for state: MascotState) {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
@@ -78,14 +70,14 @@ struct PreferencesView: View {
         }
     }
 
-    private func chooseSound(for event: EventType) {
+    private func chooseSound(for state: MascotState) {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
         panel.allowedContentTypes = [.wav, .mp3, .aiff, .mpeg4Audio]
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
-            try assetStore.registerSound(source: url, for: event)
+            try assetStore.registerSound(source: url, for: state)
         } catch {
             presentError(error)
         }
@@ -123,7 +115,7 @@ private struct AssetSlotRow: View {
 
 private struct SpeechRow: View {
     @ObservedObject var assetStore: AssetStore
-    let event: EventType
+    let state: MascotState
     let label: String
     @State private var draft: String = ""
     @FocusState private var isFocused: Bool
@@ -144,16 +136,15 @@ private struct SpeechRow: View {
     }
 
     private var currentText: String {
-        switch event {
-        case .sessionStart: return assetStore.config.speeches.sessionStart
-        case .needInput: return assetStore.config.speeches.needInput
-        case .sessionEnd: return assetStore.config.speeches.sessionEnd
+        switch state {
+        case .idle: return assetStore.config.speeches.idle
+        case .working: return assetStore.config.speeches.working
         }
     }
 
     private func commit() {
         if draft != currentText {
-            assetStore.updateSpeech(for: event, text: draft)
+            assetStore.updateSpeech(for: state, text: draft)
         }
     }
 }

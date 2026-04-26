@@ -1,18 +1,12 @@
 import Foundation
 
-enum EventType: String, Codable, CaseIterable {
-    case sessionStart = "session_start"
-    case needInput = "need_input"
-    case sessionEnd = "session_end"
-}
-
 struct SpeakiEvent: Codable {
-    let event: EventType
+    let state: MascotState
     let sessionId: String
     let pid: Int?
 
     enum CodingKeys: String, CodingKey {
-        case event
+        case state
         case sessionId = "session_id"
         case pid
     }

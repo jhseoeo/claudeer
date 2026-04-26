@@ -7,30 +7,29 @@ final class ConfigTests: XCTestCase {
         {
           "default_area": "bottom",
           "speeches": {
-            "session_start": "Hi!",
-            "need_input": "Input please",
-            "session_end": "Bye"
+            "idle": "Need input!",
+            "working": "On it!"
           }
         }
         """.data(using: .utf8)!
 
         let config = try JSONDecoder().decode(SpeakiConfig.self, from: json)
         XCTAssertEqual(config.defaultArea, "bottom")
-        XCTAssertEqual(config.speeches.sessionStart, "Hi!")
-        XCTAssertEqual(config.speeches.needInput, "Input please")
-        XCTAssertEqual(config.speeches.sessionEnd, "Bye")
+        XCTAssertEqual(config.speeches.idle, "Need input!")
+        XCTAssertEqual(config.speeches.working, "On it!")
     }
 
     func testDefaultConfig() {
         let config = SpeakiConfig.default
         XCTAssertEqual(config.defaultArea, "bottom")
-        XCTAssertFalse(config.speeches.needInput.isEmpty)
+        XCTAssertFalse(config.speeches.idle.isEmpty)
+        XCTAssertFalse(config.speeches.working.isEmpty)
     }
 
     func testSaveAndReload() throws {
         let original = SpeakiConfig(
             defaultArea: "top",
-            speeches: Speeches(sessionStart: "Yo", needInput: "Halp", sessionEnd: "Cya")
+            speeches: Speeches(idle: "Halp", working: "Yo")
         )
         let tmpURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("claudeer-test-\(UUID().uuidString).json")
@@ -40,8 +39,7 @@ final class ConfigTests: XCTestCase {
         let reloaded = SpeakiConfig.load(from: tmpURL)
 
         XCTAssertEqual(reloaded.defaultArea, "top")
-        XCTAssertEqual(reloaded.speeches.sessionStart, "Yo")
-        XCTAssertEqual(reloaded.speeches.needInput, "Halp")
-        XCTAssertEqual(reloaded.speeches.sessionEnd, "Cya")
+        XCTAssertEqual(reloaded.speeches.idle, "Halp")
+        XCTAssertEqual(reloaded.speeches.working, "Yo")
     }
 }

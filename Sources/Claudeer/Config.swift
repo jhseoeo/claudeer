@@ -1,15 +1,8 @@
 import Foundation
 
 struct Speeches: Codable {
-    let sessionStart: String
-    let needInput: String
-    let sessionEnd: String
-
-    enum CodingKeys: String, CodingKey {
-        case sessionStart = "session_start"
-        case needInput = "need_input"
-        case sessionEnd = "session_end"
-    }
+    let idle: String
+    let working: String
 }
 
 struct SpeakiConfig: Codable {
@@ -24,9 +17,8 @@ struct SpeakiConfig: Codable {
     static let `default` = SpeakiConfig(
         defaultArea: "bottom",
         speeches: Speeches(
-            sessionStart: "Hello!",
-            needInput: "Need your input!",
-            sessionEnd: "Goodbye!"
+            idle: "Need your input!",
+            working: "On it!"
         )
     )
 
