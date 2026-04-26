@@ -53,7 +53,11 @@ open dist/Claudeer.app
 >
 > **APNG 등록 팁**: macOS에 APNG 시스템 UTType이 없어서 파일 피커에서 `.apng` 확장자가 안 보일 수 있어요. APNG는 PNG와 호환되니까 `mv myanim.apng myanim.png` 으로 이름만 바꿔서 등록하면 애니메이션이 정상 재생됩니다.
 
-**Sounds** — `idle` / `working` 전이 시점에 재생. 형식: WAV, MP3, AIFF, M4A. 전부 선택사항.
+**Sounds** — `idle` / `working` 슬롯. 형식: WAV, MP3, AIFF, M4A. 전부 선택사항.
+
+각 슬롯에 **Loop** 체크박스가 있어요:
+- **Off (기본)**: 그 상태로 전이하는 순간 1회만 재생 (알림용 효과음에 적합)
+- **On**: 그 상태에 있는 동안 무한 반복 재생 (working 동안 BGM 깔고 싶을 때 등). 다른 상태로 전이하면 즉시 멈춤.
 
 **Speeches** — 각 상태로 전이할 때 표시될 말풍선 텍스트. 텍스트 필드 편집 후 포커스 해제하면 자동 저장.
 
