@@ -4,13 +4,14 @@ import XCTest
 final class EventServerTests: XCTestCase {
     func testParseWorkingEvent() throws {
         let json = """
-        {"state": "working", "session_id": "abc123", "pid": 12345}
+        {"state": "working", "session_id": "abc123", "pid": 12345, "cwd": "/home/user/proj"}
         """.data(using: .utf8)!
 
         let event = try JSONDecoder().decode(SpeakiEvent.self, from: json)
         XCTAssertEqual(event.state, .working)
         XCTAssertEqual(event.sessionId, "abc123")
         XCTAssertEqual(event.pid, 12345)
+        XCTAssertEqual(event.cwd, "/home/user/proj")
     }
 
     func testParseIdleEvent() throws {
@@ -21,5 +22,6 @@ final class EventServerTests: XCTestCase {
         let event = try JSONDecoder().decode(SpeakiEvent.self, from: json)
         XCTAssertEqual(event.state, .idle)
         XCTAssertNil(event.pid)
+        XCTAssertNil(event.cwd)
     }
 }

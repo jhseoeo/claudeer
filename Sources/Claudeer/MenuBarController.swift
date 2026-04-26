@@ -7,6 +7,7 @@ class MenuBarController: NSObject {
     private var preferencesWindow: PreferencesWindow?
 
     var assetStore: AssetStore?
+    var sessionTracker: SessionTracker?
     var onAreaChanged: ((AreaPreset) -> Void)?
     var onVolumeChanged: ((Float) -> Void)?
     var currentPreset: AreaPreset = .bottom
@@ -26,7 +27,10 @@ class MenuBarController: NSObject {
             button.target = self
         }
 
-        let view = MenuBarPopoverView(controller: self)
+        let view = MenuBarPopoverView(
+            controller: self,
+            sessionTracker: sessionTracker ?? SessionTracker()
+        )
         let hosting = NSHostingController(rootView: view)
         hosting.sizingOptions = .preferredContentSize
         popover = NSPopover()
@@ -55,6 +59,7 @@ class MenuBarController: NSObject {
 
 struct MenuBarPopoverView: View {
     let controller: MenuBarController
+    @ObservedObject var sessionTracker: SessionTracker
     @State private var selectedPreset: AreaPreset = .bottom
     @State private var volume: Double = 1.0
 
@@ -62,6 +67,10 @@ struct MenuBarPopoverView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Claudeer")
                 .font(.headline)
+
+            Divider()
+
+            sessionsSection
 
             Divider()
 
@@ -94,9 +103,60 @@ struct MenuBarPopoverView: View {
             .buttonStyle(.bordered)
         }
         .padding()
-        .frame(width: 240)
+        .frame(width: 260)
         .onAppear {
             selectedPreset = controller.currentPreset
         }
+    }
+
+    private var sessionsSection: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if sessionTracker.sessions.isEmpty {
+                Text("No active sessions")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            } else {
+                Text("Sessions (\(sessionTracker.sessions.count))")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                ForEach(sessionTracker.sessions) { session in
+                    SessionRow(session: session)
+                }
+            }
+        }
+    }
+}
+
+private struct SessionRow: View {
+    let session: SessionInfo
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: session.state == .working ? "bolt.fill" : "pause.circle")
+                .foregroundColor(session.state == .working ? .accentColor : .secondary)
+                .frame(width: 12)
+            Text(label)
+                .font(.caption)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer()
+        }
+        .help(tooltip)
+    }
+
+    private var label: String {
+        if let cwd = session.cwd, let last = cwd.split(separator: "/").last {
+            return String(last)
+        }
+        return String(session.id.prefix(8))
+    }
+
+    private var tooltip: String {
+        var parts: [String] = []
+        if let cwd = session.cwd { parts.append("cwd: \(cwd)") }
+        if let pid = session.pid { parts.append("pid: \(pid)") }
+        parts.append("session: \(session.id)")
+        parts.append("state: \(session.state.rawValue)")
+        return parts.joined(separator: "\n")
     }
 }

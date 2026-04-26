@@ -36,9 +36,10 @@ Claude Code Hooks (Python) ──(Unix Socket)──> Swift App
     SessionStart / UserPromptSubmit /       EventServer (POSIX socket on /tmp/claudeer.sock)
     Stop / Notification                          │
                                            EventManager (tracks currentState; fires only on change)
-                                            │    │    │
-                              CharacterController │  SoundPlayer
-                                    │         SpeechBubbleView
+                                            │    │    │ ─── owns SessionTracker (per-session info)
+                              CharacterController │  SoundPlayer       │
+                                    │         SpeechBubbleView         └── observed by MenuBar popover
+
                               SpriteEngine (idle/working + interaction sprite override)
                                     │
                               MascotWindow (transparent NSWindow, click-through except over sprite)
@@ -58,7 +59,9 @@ AssetStore (~/Library/Application Support/Claudeer/)
 
 **Thread model**: EventServer accept loop runs on a background GCD queue. All events are dispatched to main thread via `DispatchQueue.main.async` before touching UI. `serverFD` and `running` are protected by NSLock.
 
-**Hook flow**: Claude Code fires hook → `notify.py` reads stdin JSON, sends `{state, session_id, pid?}` to Unix socket, prints `{"continue": true}`. Fails silently if app isn't running. Hook → state mapping: `SessionStart`→`idle` (with PID for crash detection), `UserPromptSubmit`→`working`, `Stop`/`Notification`→`idle`. EventManager dedupes — sound + bubble only fire when state actually changes.
+**Hook flow**: Claude Code fires hook → `notify.py` reads stdin JSON, sends `{state, session_id, pid, cwd?}` to Unix socket, prints `{"continue": true}`. Fails silently if app isn't running. Hook → state mapping: `SessionStart`/`Stop`/`Notification`→`idle`, `UserPromptSubmit`→`working`. `pid` is `os.getppid()` (the Claude Code process) and is sent on every event so SessionTracker can keep info fresh and prune dead processes. `cwd` is from the hook input JSON. EventManager dedupes — sound + bubble only fire when state actually changes.
+
+**Sessions tracking**: `SessionTracker` (in `EventManager.sessionTracker`) is a small ObservableObject that records per-session `SessionInfo { id, pid, cwd, state, lastSeen }` on every incoming event. Sorted by `lastSeen` desc and exposed as `@Published var sessions` for the menu bar popover. `pruneDeadProcesses` runs every 10s — sessions whose pid no longer exists (`kill(pid, 0) != 0`) are removed. If the global state was `working` and no session remains in `working` after a prune, EventManager forces an `idle` transition (so the mascot doesn't get stuck working when Claude Code crashes).
 
 ## Key Conventions
 

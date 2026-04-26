@@ -51,6 +51,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             soundPlayer: soundPlayer!,
             speechBubble: speechBubble!,
             spriteEngine: spriteEngine!,
+            sessionTracker: SessionTracker(),
             config: store.config
         )
         eventManager?.startPIDMonitoring()
@@ -83,6 +84,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         menuBarController = MenuBarController()
         menuBarController?.assetStore = store
+        menuBarController?.sessionTracker = eventManager?.sessionTracker
         menuBarController?.currentPreset = AreaPreset(rawValue: store.config.defaultArea) ?? .bottom
         menuBarController?.onAreaChanged = { [weak self] preset in
             if let screen = NSScreen.main {

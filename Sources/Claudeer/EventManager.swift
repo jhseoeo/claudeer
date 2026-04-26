@@ -5,10 +5,10 @@ class EventManager {
     private let soundPlayer: SoundPlayer
     private let speechBubble: SpeechBubbleView
     private let spriteEngine: SpriteEngine
+    let sessionTracker: SessionTracker
     var config: SpeakiConfig
 
     private var currentState: MascotState = .idle
-    private var activeSessions: [String: Int] = [:]
     private var pidCheckTimer: Timer?
 
     init(
@@ -16,19 +16,19 @@ class EventManager {
         soundPlayer: SoundPlayer,
         speechBubble: SpeechBubbleView,
         spriteEngine: SpriteEngine,
+        sessionTracker: SessionTracker,
         config: SpeakiConfig
     ) {
         self.characterController = characterController
         self.soundPlayer = soundPlayer
         self.speechBubble = speechBubble
         self.spriteEngine = spriteEngine
+        self.sessionTracker = sessionTracker
         self.config = config
     }
 
     func handleEvent(_ event: SpeakiEvent) {
-        if let pid = event.pid {
-            activeSessions[event.sessionId] = pid
-        }
+        sessionTracker.record(event)
         applyTransition(to: event.state)
     }
 
@@ -75,11 +75,9 @@ class EventManager {
     }
 
     private func checkActiveSessions() {
-        for (sessionId, pid) in activeSessions {
-            if kill(Int32(pid), 0) != 0 {
-                activeSessions.removeValue(forKey: sessionId)
-                applyTransition(to: .idle)
-            }
+        let pruned = sessionTracker.pruneDeadProcesses()
+        if !pruned.isEmpty && currentState == .working && !sessionTracker.anyWorking {
+            applyTransition(to: .idle)
         }
     }
 }
