@@ -13,6 +13,8 @@ class MenuBarController: NSObject {
 
     func setup() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        statusItem?.autosaveName = "Claudeer"
+        statusItem?.isVisible = true
         if let button = statusItem?.button {
             if let image = NSImage(systemSymbolName: "pawprint.fill", accessibilityDescription: "Claudeer") {
                 image.isTemplate = true

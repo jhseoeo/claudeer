@@ -27,6 +27,21 @@ mkdir -p "${APP_DIR}/Contents/MacOS"
 echo "==> Copying binary"
 cp "${EXEC_PATH}" "${APP_DIR}/Contents/MacOS/${APP_NAME}"
 
+echo "==> Detect signing identity"
+IDENTITIES=$(security find-identity -v -p codesigning 2>/dev/null || true)
+SIGN_IDENTITY=$(echo "${IDENTITIES}" | sed -n 's/.*"\(Apple Development:[^"]*\)".*/\1/p' | head -1)
+if [ -z "${SIGN_IDENTITY}" ]; then
+    SIGN_IDENTITY=$(echo "${IDENTITIES}" | sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p' | head -1)
+fi
+
+if [ -n "${SIGN_IDENTITY}" ]; then
+    echo "    Using: ${SIGN_IDENTITY}"
+else
+    SIGN_IDENTITY="-"
+    echo "    No Apple identity found, falling back to ad-hoc."
+    echo "    NOTE: macOS 26+ may hide menu bar icons for ad-hoc apps."
+fi
+
 echo "==> Writing Info.plist"
 cat > "${APP_DIR}/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -56,6 +71,10 @@ cat > "${APP_DIR}/Contents/Info.plist" <<EOF
 </dict>
 </plist>
 EOF
+
+echo "==> Codesigning bundle"
+codesign --force --deep --options runtime --sign "${SIGN_IDENTITY}" "${APP_DIR}"
+codesign -dvv "${APP_DIR}" 2>&1 | grep -E "^(Identifier|Authority|TeamIdentifier|Signature)"
 
 echo ""
 echo "Built: ${APP_DIR}"
