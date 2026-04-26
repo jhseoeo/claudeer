@@ -27,10 +27,11 @@ class MenuBarController: NSObject {
         }
 
         let view = MenuBarPopoverView(controller: self)
+        let hosting = NSHostingController(rootView: view)
+        hosting.sizingOptions = .preferredContentSize
         popover = NSPopover()
-        popover?.contentSize = NSSize(width: 220, height: 320)
         popover?.behavior = .transient
-        popover?.contentViewController = NSHostingController(rootView: view)
+        popover?.contentViewController = hosting
     }
 
     @objc private func togglePopover() {
@@ -58,27 +59,20 @@ struct MenuBarPopoverView: View {
     @State private var volume: Double = 1.0
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             Text("Claudeer")
                 .font(.headline)
 
             Divider()
 
-            Text("Area").font(.subheadline.bold())
-            ForEach(AreaPreset.allCases, id: \.self) { preset in
-                Button(action: {
-                    selectedPreset = preset
-                    controller.onAreaChanged?(preset)
-                }) {
-                    HStack {
-                        Image(systemName: selectedPreset == preset ? "checkmark.circle.fill" : "circle")
-                        Text(preset.displayName)
-                    }
+            Picker("Area", selection: $selectedPreset) {
+                ForEach(AreaPreset.allCases, id: \.self) { preset in
+                    Text(preset.displayName).tag(preset)
                 }
-                .buttonStyle(.plain)
             }
-
-            Divider()
+            .onChange(of: selectedPreset) { newValue in
+                controller.onAreaChanged?(newValue)
+            }
 
             HStack {
                 Text("Volume")
@@ -92,12 +86,15 @@ struct MenuBarPopoverView: View {
             Button("Preferences...") {
                 controller.openPreferences()
             }
+            .buttonStyle(.bordered)
 
             Button("Quit") {
                 NSApp.terminate(nil)
             }
+            .buttonStyle(.bordered)
         }
         .padding()
+        .frame(width: 240)
         .onAppear {
             selectedPreset = controller.currentPreset
         }
