@@ -7,3 +7,4 @@ DerivedData/
 temp/
 settings.local.json
 dist/
+.claude/
