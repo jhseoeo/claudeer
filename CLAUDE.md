@@ -63,6 +63,8 @@ AssetStore (~/Library/Application Support/Claudeer/)
 
 **Sessions tracking**: `SessionTracker` (in `EventManager.sessionTracker`) is a small ObservableObject that records per-session `SessionInfo { id, pid, cwd, state, lastSeen }` on every incoming event. Sorted by `lastSeen` desc and exposed as `@Published var sessions` for the menu bar popover. `pruneDeadProcesses` runs every 10s — sessions whose pid no longer exists (`kill(pid, 0) != 0`) are removed. If the global state was `working` and no session remains in `working` after a prune, EventManager forces an `idle` transition (so the mascot doesn't get stuck working when Claude Code crashes).
 
+**Mascot visibility**: `main.swift` subscribes to `sessionTracker.$sessions`. The window is `orderOut(nil)` when sessions is empty, `orderFront(nil)` when at least one session exists. App start with no sessions = no mascot visible (only the menu bar icon). Implication: if the mascot app launches AFTER an existing Claude Code session, that session is invisible to the tracker until the next hook event fires (since SessionStart already happened).
+
 ## Key Conventions
 
 - **Pure stdlib** on both sides — no external Swift packages, no Python pip dependencies
