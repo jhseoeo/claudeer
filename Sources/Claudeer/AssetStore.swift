@@ -42,4 +42,32 @@ class AssetStore {
         }
         return nil
     }
+
+    func registerSprite(source: URL, for state: SpriteState) throws {
+        clearSprite(for: state)
+        let ext = source.pathExtension.lowercased()
+        let dest = spritesDirectory.appendingPathComponent("\(state.rawValue).\(ext)")
+        try FileManager.default.copyItem(at: source, to: dest)
+    }
+
+    func registerSound(source: URL, for event: EventType) throws {
+        clearSound(for: event)
+        let ext = source.pathExtension.lowercased()
+        let dest = soundsDirectory.appendingPathComponent("\(event.rawValue).\(ext)")
+        try FileManager.default.copyItem(at: source, to: dest)
+    }
+
+    func clearSprite(for state: SpriteState) {
+        for ext in Self.spriteExtensions {
+            let url = spritesDirectory.appendingPathComponent("\(state.rawValue).\(ext)")
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
+
+    func clearSound(for event: EventType) {
+        for ext in Self.soundExtensions {
+            let url = soundsDirectory.appendingPathComponent("\(event.rawValue).\(ext)")
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
 }

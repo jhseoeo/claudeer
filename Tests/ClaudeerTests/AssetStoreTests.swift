@@ -64,4 +64,68 @@ final class AssetStoreTests: XCTestCase {
         try Data("fake".utf8).write(to: soundFile)
         XCTAssertEqual(store.currentSoundURL(for: .sessionStart), soundFile)
     }
+
+    func testRegisterSpriteCopiesFile() throws {
+        let store = AssetStore(baseDirectory: tempDir)
+        let source = tempDir.appendingPathComponent("source.gif")
+        try Data("data".utf8).write(to: source)
+
+        try store.registerSprite(source: source, for: .idle)
+
+        let dest = store.spritesDirectory.appendingPathComponent("idle.gif")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: dest.path))
+        XCTAssertEqual(try Data(contentsOf: dest), Data("data".utf8))
+    }
+
+    func testRegisterSpriteReplacesDifferentExtension() throws {
+        let store = AssetStore(baseDirectory: tempDir)
+        let oldFile = store.spritesDirectory.appendingPathComponent("idle.png")
+        try Data("old".utf8).write(to: oldFile)
+
+        let source = tempDir.appendingPathComponent("source.gif")
+        try Data("new".utf8).write(to: source)
+        try store.registerSprite(source: source, for: .idle)
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: oldFile.path))
+        let newFile = store.spritesDirectory.appendingPathComponent("idle.gif")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: newFile.path))
+    }
+
+    func testRegisterSoundCopiesFile() throws {
+        let store = AssetStore(baseDirectory: tempDir)
+        let source = tempDir.appendingPathComponent("ding.wav")
+        try Data("audio".utf8).write(to: source)
+
+        try store.registerSound(source: source, for: .needInput)
+
+        let dest = store.soundsDirectory.appendingPathComponent("need_input.wav")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: dest.path))
+    }
+
+    func testClearSpriteRemovesFile() throws {
+        let store = AssetStore(baseDirectory: tempDir)
+        let file = store.spritesDirectory.appendingPathComponent("idle.gif")
+        try Data("data".utf8).write(to: file)
+
+        store.clearSprite(for: .idle)
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: file.path))
+        XCTAssertNil(store.currentSpriteURL(for: .idle))
+    }
+
+    func testClearSpriteWhenAbsentIsNoOp() {
+        let store = AssetStore(baseDirectory: tempDir)
+        store.clearSprite(for: .alert)
+        XCTAssertNil(store.currentSpriteURL(for: .alert))
+    }
+
+    func testClearSoundRemovesFile() throws {
+        let store = AssetStore(baseDirectory: tempDir)
+        let file = store.soundsDirectory.appendingPathComponent("session_end.mp3")
+        try Data("data".utf8).write(to: file)
+
+        store.clearSound(for: .sessionEnd)
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: file.path))
+    }
 }
