@@ -26,4 +26,22 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(config.defaultArea, "bottom")
         XCTAssertFalse(config.speeches.needInput.isEmpty)
     }
+
+    func testSaveAndReload() throws {
+        let original = SpeakiConfig(
+            defaultArea: "top",
+            speeches: Speeches(sessionStart: "Yo", needInput: "Halp", sessionEnd: "Cya")
+        )
+        let tmpURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("claudeer-test-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: tmpURL) }
+
+        try original.save(to: tmpURL)
+        let reloaded = SpeakiConfig.load(from: tmpURL)
+
+        XCTAssertEqual(reloaded.defaultArea, "top")
+        XCTAssertEqual(reloaded.speeches.sessionStart, "Yo")
+        XCTAssertEqual(reloaded.speeches.needInput, "Halp")
+        XCTAssertEqual(reloaded.speeches.sessionEnd, "Cya")
+    }
 }
