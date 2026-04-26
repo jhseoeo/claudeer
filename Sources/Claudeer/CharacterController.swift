@@ -6,6 +6,8 @@ class CharacterController {
     private var currentArea: CGRect = .zero
     private var target: NSPoint = .zero
     private var speed: CGFloat = 2.0
+    private var movements: MovementSettings = .allOn
+    private var currentState: MascotState = .idle
 
     private var isMoving = false
     private var isFrozen = false
@@ -23,6 +25,17 @@ class CharacterController {
         spriteEngine.setPosition(pos)
     }
 
+    func setMovement(_ settings: MovementSettings) {
+        movements = settings
+        if !movements.value(for: currentState) {
+            isMoving = false
+        }
+    }
+
+    func setSpeed(_ value: CGFloat) {
+        speed = value
+    }
+
     func start() {
         pickNewIdleDuration()
         movementTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
@@ -37,6 +50,10 @@ class CharacterController {
 
     private func tick() {
         if isFrozen { return }
+        if !movements.value(for: currentState) {
+            isMoving = false
+            return
+        }
         if isMoving {
             moveTowardTarget()
         } else {
@@ -97,6 +114,7 @@ class CharacterController {
     func transitionTo(_ state: MascotState) {
         transitionWorkItem?.cancel()
         spriteEngine.setState(state)
+        currentState = state
         isMoving = false
         isFrozen = true
         let workItem = DispatchWorkItem { [weak self] in

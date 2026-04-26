@@ -41,6 +41,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let preset = AreaPreset(rawValue: store.config.defaultArea) ?? .bottom
             characterController?.setArea(preset, screenSize: screen.frame.size)
         }
+        characterController?.setMovement(store.config.movements)
+        characterController?.setSpeed(CGFloat(store.config.speed))
         characterController?.start()
 
         eventManager = EventManager(
@@ -59,6 +61,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self.soundPlayer?.loadSounds(from: store.soundsDirectory)
             self.eventManager?.config = store.config
             self.eventManager?.syncLoop()
+            self.characterController?.setMovement(store.config.movements)
+            self.characterController?.setSpeed(CGFloat(store.config.speed))
         }
 
         eventServer = EventServer()
