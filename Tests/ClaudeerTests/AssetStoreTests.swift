@@ -240,4 +240,57 @@ final class AssetStoreTests: XCTestCase {
         store.updateSpeech(for: .idle, text: "Hi")
         XCTAssertEqual(fired, 1)
     }
+
+    func testRegisterInteractionSpriteCopiesFile() throws {
+        let store = AssetStore(baseDirectory: tempDir)
+        let source = tempDir.appendingPathComponent("source.gif")
+        try Data("data".utf8).write(to: source)
+
+        try store.registerInteractionSprite(source: source, for: .drag)
+
+        let dest = store.spritesDirectory.appendingPathComponent("drag.gif")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: dest.path))
+        XCTAssertEqual(store.currentInteractionSpriteURL(for: .drag), dest)
+    }
+
+    func testRegisterInteractionSoundCopiesFile() throws {
+        let store = AssetStore(baseDirectory: tempDir)
+        let source = tempDir.appendingPathComponent("ding.wav")
+        try Data("audio".utf8).write(to: source)
+
+        try store.registerInteractionSound(source: source, for: .dragPress)
+
+        let dest = store.soundsDirectory.appendingPathComponent("drag_press.wav")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: dest.path))
+        XCTAssertEqual(store.currentInteractionSoundURL(for: .dragPress), dest)
+    }
+
+    func testClearInteractionSpriteRemovesFile() throws {
+        let store = AssetStore(baseDirectory: tempDir)
+        let file = store.spritesDirectory.appendingPathComponent("click.png")
+        try Data("data".utf8).write(to: file)
+
+        store.clearInteractionSprite(for: .click)
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: file.path))
+        XCTAssertNil(store.currentInteractionSpriteURL(for: .click))
+    }
+
+    func testInteractionAssetsCoexistWithStateAssets() throws {
+        let store = AssetStore(baseDirectory: tempDir)
+        let idleSource = tempDir.appendingPathComponent("a.png")
+        let dragSource = tempDir.appendingPathComponent("b.png")
+        try Data("idle".utf8).write(to: idleSource)
+        try Data("drag".utf8).write(to: dragSource)
+
+        try store.registerSprite(source: idleSource, for: .idle)
+        try store.registerInteractionSprite(source: dragSource, for: .drag)
+
+        XCTAssertNotNil(store.currentSpriteURL(for: .idle))
+        XCTAssertNotNil(store.currentInteractionSpriteURL(for: .drag))
+
+        store.clearInteractionSprite(for: .drag)
+        XCTAssertNotNil(store.currentSpriteURL(for: .idle))
+        XCTAssertNil(store.currentInteractionSpriteURL(for: .drag))
+    }
 }

@@ -10,6 +10,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var speechBubble: SpeechBubbleView?
     var menuBarController: MenuBarController?
     var assetStore: AssetStore?
+    var interactionController: InteractionController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -19,7 +20,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         mascotWindow = MascotWindow()
 
-        let contentView = NSView(frame: mascotWindow!.frame)
+        let contentView = InteractionView(frame: mascotWindow!.frame)
         contentView.wantsLayer = true
 
         let spriteSize = NSRect(x: 100, y: 100, width: 64, height: 64)
@@ -65,6 +66,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self.characterController?.setSpeed(CGFloat(store.config.speed))
         }
 
+        interactionController = InteractionController(
+            window: mascotWindow!,
+            interactionView: contentView,
+            spriteEngine: spriteEngine!,
+            soundPlayer: soundPlayer!,
+            characterController: characterController!
+        )
+        interactionController?.start()
+
         eventServer = EventServer()
         eventServer?.onEvent = { [weak self] event in
             self?.eventManager?.handleEvent(event)
@@ -92,6 +102,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         characterController?.stop()
         eventServer?.stop()
         eventManager?.stopPIDMonitoring()
+        interactionController?.stop()
     }
 }
 

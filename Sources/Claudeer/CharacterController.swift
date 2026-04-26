@@ -11,6 +11,7 @@ class CharacterController {
 
     private var isMoving = false
     private var isFrozen = false
+    private var isDragging = false
     private var idleTimer: TimeInterval = 0
     private var idleDuration: TimeInterval = 0
     private var transitionWorkItem: DispatchWorkItem?
@@ -36,6 +37,21 @@ class CharacterController {
         speed = value
     }
 
+    func setBeingDragged(_ dragging: Bool) {
+        isDragging = dragging
+        if dragging {
+            isMoving = false
+        } else {
+            pickNewIdleDuration()
+        }
+    }
+
+    var spriteFrame: NSRect { spriteEngine.view.frame }
+
+    func setSpritePosition(_ point: NSPoint) {
+        spriteEngine.setPosition(point)
+    }
+
     func start() {
         pickNewIdleDuration()
         movementTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak self] _ in
@@ -49,7 +65,7 @@ class CharacterController {
     }
 
     private func tick() {
-        if isFrozen { return }
+        if isFrozen || isDragging { return }
         if !movements.value(for: currentState) {
             isMoving = false
             return

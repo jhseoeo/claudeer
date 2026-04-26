@@ -39,9 +39,13 @@ Claude Code Hooks (Python) ──(Unix Socket)──> Swift App
                                             │    │    │
                               CharacterController │  SoundPlayer
                                     │         SpeechBubbleView
-                              SpriteEngine (idle/working sprite swap)
+                              SpriteEngine (idle/working + interaction sprite override)
                                     │
-                              MascotWindow (transparent NSWindow, click-through)
+                              MascotWindow (transparent NSWindow, click-through except over sprite)
+                                    ▲
+                                    │
+                              InteractionController (cursor polling, drag/click state machine)
+                              InteractionView (NSView; forwards mouseDown/Dragged/Up to controller)
 
 AssetStore (~/Library/Application Support/Claudeer/)
   ├── feeds: SpriteEngine.loadSprites(...) / SoundPlayer.loadSounds(...) / EventManager.config / CharacterController.setMovement+setSpeed
@@ -64,6 +68,8 @@ AssetStore (~/Library/Application Support/Claudeer/)
 - A speech bubble only fires on actual state transitions (idle↔working). Repeated events at the same state are deduped in `EventManager.applyTransition`
 - Sounds default to one-shot at transition. Per-state `loops` flag in config (set via Preferences checkbox) makes the sound loop while in that state; transitioning out stops it. `EventManager.syncLoop()` re-evaluates the current state's loop after startup and after hot reload, so toggling the checkbox or swapping the file takes effect immediately
 - Movement is gated per-state via `movements: { idle, working }` in config (default both `true`). `CharacterController.tick()` short-circuits when `movements.value(for: currentState)` is false. Global `speed` is a Double in config (range 0.5–6.0 px/frame at 30fps, default 2.0). Both apply on hot reload via `setMovement` / `setSpeed`
+- Interaction assets (`InteractionSprite`: `drag`, `click`; `InteractionSound`: `drag_press`, `drag_release`, `click`) live alongside state assets in the same `sprites/` and `sounds/` directories — distinguished only by filename. SpriteEngine has a separate override layer for interaction sprites that is shown on top of the base state sprite and cleared explicitly. SoundPlayer.playInteraction is a one-shot that does not disturb loop state
+- `InteractionController` polls the cursor position at 30Hz and toggles `MascotWindow.ignoresMouseEvents` based on whether the cursor is over the sprite frame. While `isMouseDown`, the toggle is forced to `false` so dragging events keep flowing. Drag is recognized when mouseDragged distance ≥ 4px from the mouseDown location; below that threshold mouseUp is treated as a click. Click sprite auto-clears after 1 second; drag sprite clears on mouseUp. `CharacterController.isDragging` flag (separate from `isFrozen`) gates movement during drag
 - User assets live in `~/Library/Application Support/Claudeer/{sprites,sounds,config.json}` and are managed by `AssetStore` (the single source of truth for asset paths and config). Nothing is bundled in `Sources/Claudeer/Resources/` — that directory has been removed
 
 ## Plugin Structure
@@ -79,7 +85,7 @@ hooks/scripts/notify.py        # Hook script — uses ${CLAUDE_PLUGIN_ROOT} for 
 - `main.swift` must keep that filename — SPM requires it for top-level code
 - `swift test` requires full Xcode.app installation, not just Command Line Tools
 - Socket path is hardcoded to `/tmp/claudeer.sock` in both `EventServer.swift` and `notify.py` — change both if modifying
-- `MascotWindow.ignoresMouseEvents = true` makes the entire overlay click-through; partial hit-testing would require overriding `NSView.hitTest(_:)`
+- `MascotWindow.ignoresMouseEvents` is dynamically toggled by `InteractionController` based on cursor proximity to the sprite — `true` (click-through) when away, `false` when over the sprite or while a drag is in progress. The `InteractionView` content view overrides `hitTest(_:)` to always return `self` so mouse events go to the interaction layer instead of the inner `NSImageView`
 - `CharacterController` freezes movement for 3s during a state transition (`isFrozen` flag) so speech bubbles stay aligned with the character
 - `AssetStore` creates the App Support directories on init — first launch is silent, no manual `mkdir` needed
 - APNG has no system-defined `UTType` on macOS, so `.apng` files are not selectable in the Preferences file picker. Users should rename `.apng` → `.png` (PNG-compatible). Documented in README
