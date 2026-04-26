@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     var mascotWindow: MascotWindow?
@@ -11,6 +12,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var menuBarController: MenuBarController?
     var assetStore: AssetStore?
     var interactionController: InteractionController?
+    private var cancellables = Set<AnyCancellable>()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -96,7 +98,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         menuBarController?.setup()
 
-        mascotWindow?.makeKeyAndOrderFront(nil)
+        eventManager?.sessionTracker.$sessions
+            .sink { [weak self] sessions in
+                guard let window = self?.mascotWindow else { return }
+                if sessions.isEmpty {
+                    window.orderOut(nil)
+                } else if !window.isVisible {
+                    window.orderFront(nil)
+                }
+            }
+            .store(in: &cancellables)
+
         print("Claudeer started")
     }
 
