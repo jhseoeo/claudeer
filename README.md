@@ -24,9 +24,17 @@ speech bubbles, and sounds at each transition.
 
 ### 2. Install as Claude Code plugin
 
+이 저장소가 자체 marketplace를 갖고 있어요. 한 번만 등록하면 됩니다.
+
 ```bash
-claude plugin add /path/to/claudeer
+# 마켓플레이스 등록 (저장소 경로)
+claude plugin marketplace add /path/to/claudeer
+
+# 플러그인 설치
+claude plugin install claudeer@claudeer-marketplace
 ```
+
+> Hook은 Claude Code 세션 시작 시점에 로드되므로, 설치 후엔 **현재 열려있는 Claude 세션을 끝내고 새로 시작해야** hook이 mascot에 이벤트를 보냅니다. 이미 켜져 있던 세션에서는 동작 안 함.
 
 ### 3. Run the app
 

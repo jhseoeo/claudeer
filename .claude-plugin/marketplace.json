@@ -1,0 +1,15 @@
+{
+  "name": "claudeer-marketplace",
+  "metadata": {
+    "description": "Local marketplace for the Claudeer mascot plugin"
+  },
+  "owner": {
+    "name": "jhseo"
+  },
+  "plugins": [
+    {
+      "name": "claudeer",
+      "source": "./"
+    }
+  ]
+}
