@@ -69,6 +69,18 @@ open dist/Claudeer.app
 | `Move while working` | working 상태일 때 어슬렁거릴지 |
 | `Speed` | 글로벌 이동 속도 슬라이더 (Slow ↔ Fast). 슬라이더 움직이면 즉시 반영 |
 
+**Interactions** — 캐릭터 클릭/드래그 시 추가 효과. 전부 옵셔널.
+
+| Slot | 의미 |
+|------|------|
+| `Drag` 스프라이트 | 드래그 중 표시할 이미지 |
+| `Click` 스프라이트 | 클릭 시 1초 동안 표시될 이미지 |
+| `Drag press` 사운드 | 드래그 시작 시 1회 재생 |
+| `Drag release` 사운드 | 드래그 종료 (마우스 release) 시 1회 재생 |
+| `Click` 사운드 | 클릭 시 1회 재생 |
+
+> 캐릭터 위에 마우스를 올리면 클릭 가능. mouseDown 후 4px 이상 움직이면 드래그로 인식. 드래그 중에는 캐릭터의 자체 이동이 멈춥니다.
+
 ### Area Presets
 
 Choose where the mascot roams via the menu bar icon (🐾):

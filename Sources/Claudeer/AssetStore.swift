@@ -32,48 +32,58 @@ class AssetStore: ObservableObject {
     }
 
     func currentSpriteURL(for state: MascotState) -> URL? {
-        for ext in Self.spriteExtensions {
-            let url = spritesDirectory.appendingPathComponent("\(state.rawValue).\(ext)")
-            if FileManager.default.fileExists(atPath: url.path) {
-                return url
-            }
-        }
-        return nil
+        findAsset(directory: spritesDirectory, baseName: state.rawValue, extensions: Self.spriteExtensions)
     }
 
     func currentSoundURL(for state: MascotState) -> URL? {
-        for ext in Self.soundExtensions {
-            let url = soundsDirectory.appendingPathComponent("\(state.rawValue).\(ext)")
-            if FileManager.default.fileExists(atPath: url.path) {
-                return url
-            }
-        }
-        return nil
+        findAsset(directory: soundsDirectory, baseName: state.rawValue, extensions: Self.soundExtensions)
+    }
+
+    func currentInteractionSpriteURL(for key: InteractionSprite) -> URL? {
+        findAsset(directory: spritesDirectory, baseName: key.rawValue, extensions: Self.spriteExtensions)
+    }
+
+    func currentInteractionSoundURL(for key: InteractionSound) -> URL? {
+        findAsset(directory: soundsDirectory, baseName: key.rawValue, extensions: Self.soundExtensions)
     }
 
     func registerSprite(source: URL, for state: MascotState) throws {
-        clearSpriteFiles(for: state)
-        let ext = source.pathExtension.lowercased()
-        let dest = spritesDirectory.appendingPathComponent("\(state.rawValue).\(ext)")
-        try FileManager.default.copyItem(at: source, to: dest)
+        try registerAsset(source: source, directory: spritesDirectory, baseName: state.rawValue, extensions: Self.spriteExtensions)
         notify()
     }
 
     func registerSound(source: URL, for state: MascotState) throws {
-        clearSoundFiles(for: state)
-        let ext = source.pathExtension.lowercased()
-        let dest = soundsDirectory.appendingPathComponent("\(state.rawValue).\(ext)")
-        try FileManager.default.copyItem(at: source, to: dest)
+        try registerAsset(source: source, directory: soundsDirectory, baseName: state.rawValue, extensions: Self.soundExtensions)
+        notify()
+    }
+
+    func registerInteractionSprite(source: URL, for key: InteractionSprite) throws {
+        try registerAsset(source: source, directory: spritesDirectory, baseName: key.rawValue, extensions: Self.spriteExtensions)
+        notify()
+    }
+
+    func registerInteractionSound(source: URL, for key: InteractionSound) throws {
+        try registerAsset(source: source, directory: soundsDirectory, baseName: key.rawValue, extensions: Self.soundExtensions)
         notify()
     }
 
     func clearSprite(for state: MascotState) {
-        clearSpriteFiles(for: state)
+        clearAssetFiles(directory: spritesDirectory, baseName: state.rawValue, extensions: Self.spriteExtensions)
         notify()
     }
 
     func clearSound(for state: MascotState) {
-        clearSoundFiles(for: state)
+        clearAssetFiles(directory: soundsDirectory, baseName: state.rawValue, extensions: Self.soundExtensions)
+        notify()
+    }
+
+    func clearInteractionSprite(for key: InteractionSprite) {
+        clearAssetFiles(directory: spritesDirectory, baseName: key.rawValue, extensions: Self.spriteExtensions)
+        notify()
+    }
+
+    func clearInteractionSound(for key: InteractionSound) {
+        clearAssetFiles(directory: soundsDirectory, baseName: key.rawValue, extensions: Self.soundExtensions)
         notify()
     }
 
@@ -134,18 +144,28 @@ class AssetStore: ObservableObject {
         notify()
     }
 
-    private func clearSpriteFiles(for state: MascotState) {
-        for ext in Self.spriteExtensions {
-            let url = spritesDirectory.appendingPathComponent("\(state.rawValue).\(ext)")
+    private func findAsset(directory: URL, baseName: String, extensions: [String]) -> URL? {
+        for ext in extensions {
+            let url = directory.appendingPathComponent("\(baseName).\(ext)")
+            if FileManager.default.fileExists(atPath: url.path) {
+                return url
+            }
+        }
+        return nil
+    }
+
+    private func clearAssetFiles(directory: URL, baseName: String, extensions: [String]) {
+        for ext in extensions {
+            let url = directory.appendingPathComponent("\(baseName).\(ext)")
             try? FileManager.default.removeItem(at: url)
         }
     }
 
-    private func clearSoundFiles(for state: MascotState) {
-        for ext in Self.soundExtensions {
-            let url = soundsDirectory.appendingPathComponent("\(state.rawValue).\(ext)")
-            try? FileManager.default.removeItem(at: url)
-        }
+    private func registerAsset(source: URL, directory: URL, baseName: String, extensions: [String]) throws {
+        clearAssetFiles(directory: directory, baseName: baseName, extensions: extensions)
+        let ext = source.pathExtension.lowercased()
+        let dest = directory.appendingPathComponent("\(baseName).\(ext)")
+        try FileManager.default.copyItem(at: source, to: dest)
     }
 
     private func notify() {

@@ -14,6 +14,8 @@ struct PreferencesView: View {
                 speechesSection
                 Divider()
                 movementSection
+                Divider()
+                interactionsSection
             }
             .padding(20)
         }
@@ -93,30 +95,77 @@ struct PreferencesView: View {
         }
     }
 
+    private var interactionsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Interactions").font(.headline)
+            Text("Sprites")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+            ForEach(InteractionSprite.allCases, id: \.self) { key in
+                AssetSlotRow(
+                    label: key.displayName,
+                    currentURL: assetStore.currentInteractionSpriteURL(for: key),
+                    onChoose: { chooseInteractionSprite(for: key) },
+                    onClear: { assetStore.clearInteractionSprite(for: key) }
+                )
+                .id(assetStore.changeVersion)
+            }
+            Text("Sounds")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .padding(.top, 4)
+            ForEach(InteractionSound.allCases, id: \.self) { key in
+                AssetSlotRow(
+                    label: key.displayName,
+                    currentURL: assetStore.currentInteractionSoundURL(for: key),
+                    onChoose: { chooseInteractionSound(for: key) },
+                    onClear: { assetStore.clearInteractionSound(for: key) }
+                )
+                .id(assetStore.changeVersion)
+            }
+        }
+    }
+
     private func chooseSprite(for state: MascotState) {
+        runSpritePanel { url in
+            try assetStore.registerSprite(source: url, for: state)
+        }
+    }
+
+    private func chooseSound(for state: MascotState) {
+        runSoundPanel { url in
+            try assetStore.registerSound(source: url, for: state)
+        }
+    }
+
+    private func chooseInteractionSprite(for key: InteractionSprite) {
+        runSpritePanel { url in
+            try assetStore.registerInteractionSprite(source: url, for: key)
+        }
+    }
+
+    private func chooseInteractionSound(for key: InteractionSound) {
+        runSoundPanel { url in
+            try assetStore.registerInteractionSound(source: url, for: key)
+        }
+    }
+
+    private func runSpritePanel(_ action: (URL) throws -> Void) {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
         panel.allowedContentTypes = [.png, .jpeg, .gif]
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        do {
-            try assetStore.registerSprite(source: url, for: state)
-        } catch {
-            presentError(error)
-        }
+        do { try action(url) } catch { presentError(error) }
     }
 
-    private func chooseSound(for state: MascotState) {
+    private func runSoundPanel(_ action: (URL) throws -> Void) {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
         panel.allowedContentTypes = [.wav, .mp3, .aiff, .mpeg4Audio]
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        do {
-            try assetStore.registerSound(source: url, for: state)
-        } catch {
-            presentError(error)
-        }
+        do { try action(url) } catch { presentError(error) }
     }
 
     private func presentError(_ error: Error) {
