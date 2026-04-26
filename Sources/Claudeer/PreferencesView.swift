@@ -37,11 +37,13 @@ struct PreferencesView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Sounds").font(.headline)
             ForEach(MascotState.allCases, id: \.self) { state in
-                AssetSlotRow(
+                SoundSlotRow(
                     label: state.displayName,
                     currentURL: assetStore.currentSoundURL(for: state),
+                    loop: assetStore.config.loops.value(for: state),
                     onChoose: { chooseSound(for: state) },
-                    onClear: { assetStore.clearSound(for: state) }
+                    onClear: { assetStore.clearSound(for: state) },
+                    onLoopChange: { assetStore.updateLoop(for: state, to: $0) }
                 )
                 .id(assetStore.changeVersion)
             }
@@ -105,6 +107,32 @@ private struct AssetSlotRow: View {
             Text(currentURL?.lastPathComponent ?? "Not registered")
                 .foregroundColor(currentURL == nil ? .secondary : .primary)
                 .frame(maxWidth: .infinity, alignment: .leading)
+            Button("Choose...", action: onChoose)
+            if currentURL != nil {
+                Button("Clear", action: onClear)
+            }
+        }
+    }
+}
+
+private struct SoundSlotRow: View {
+    let label: String
+    let currentURL: URL?
+    let loop: Bool
+    let onChoose: () -> Void
+    let onClear: () -> Void
+    let onLoopChange: (Bool) -> Void
+
+    var body: some View {
+        HStack {
+            Text(label)
+                .frame(width: 80, alignment: .leading)
+            Text(currentURL?.lastPathComponent ?? "Not registered")
+                .foregroundColor(currentURL == nil ? .secondary : .primary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Toggle("Loop", isOn: Binding(get: { loop }, set: onLoopChange))
+                .toggleStyle(.checkbox)
+                .disabled(currentURL == nil)
             Button("Choose...", action: onChoose)
             if currentURL != nil {
                 Button("Clear", action: onClear)

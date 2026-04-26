@@ -9,6 +9,10 @@ final class ConfigTests: XCTestCase {
           "speeches": {
             "idle": "Need input!",
             "working": "On it!"
+          },
+          "loops": {
+            "idle": false,
+            "working": true
           }
         }
         """.data(using: .utf8)!
@@ -17,6 +21,21 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(config.defaultArea, "bottom")
         XCTAssertEqual(config.speeches.idle, "Need input!")
         XCTAssertEqual(config.speeches.working, "On it!")
+        XCTAssertFalse(config.loops.idle)
+        XCTAssertTrue(config.loops.working)
+    }
+
+    func testParseConfigWithoutLoopsDefaultsOff() throws {
+        let json = """
+        {
+          "default_area": "bottom",
+          "speeches": { "idle": "a", "working": "b" }
+        }
+        """.data(using: .utf8)!
+
+        let config = try JSONDecoder().decode(SpeakiConfig.self, from: json)
+        XCTAssertFalse(config.loops.idle)
+        XCTAssertFalse(config.loops.working)
     }
 
     func testDefaultConfig() {
@@ -24,12 +43,15 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(config.defaultArea, "bottom")
         XCTAssertFalse(config.speeches.idle.isEmpty)
         XCTAssertFalse(config.speeches.working.isEmpty)
+        XCTAssertFalse(config.loops.idle)
+        XCTAssertFalse(config.loops.working)
     }
 
     func testSaveAndReload() throws {
         let original = SpeakiConfig(
             defaultArea: "top",
-            speeches: Speeches(idle: "Halp", working: "Yo")
+            speeches: Speeches(idle: "Halp", working: "Yo"),
+            loops: LoopSettings(idle: true, working: false)
         )
         let tmpURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("claudeer-test-\(UUID().uuidString).json")
@@ -41,5 +63,7 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(reloaded.defaultArea, "top")
         XCTAssertEqual(reloaded.speeches.idle, "Halp")
         XCTAssertEqual(reloaded.speeches.working, "Yo")
+        XCTAssertTrue(reloaded.loops.idle)
+        XCTAssertFalse(reloaded.loops.working)
     }
 }

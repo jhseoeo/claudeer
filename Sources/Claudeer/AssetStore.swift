@@ -86,7 +86,21 @@ class AssetStore: ObservableObject {
         case .working:
             updated = Speeches(idle: s.idle, working: text)
         }
-        config = SpeakiConfig(defaultArea: config.defaultArea, speeches: updated)
+        config = SpeakiConfig(defaultArea: config.defaultArea, speeches: updated, loops: config.loops)
+        try? config.save(to: configURL)
+        notify()
+    }
+
+    func updateLoop(for state: MascotState, to value: Bool) {
+        let l = config.loops
+        let updated: LoopSettings
+        switch state {
+        case .idle:
+            updated = LoopSettings(idle: value, working: l.working)
+        case .working:
+            updated = LoopSettings(idle: l.idle, working: value)
+        }
+        config = SpeakiConfig(defaultArea: config.defaultArea, speeches: config.speeches, loops: updated)
         try? config.save(to: configURL)
         notify()
     }

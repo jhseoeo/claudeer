@@ -32,11 +32,22 @@ class EventManager {
         applyTransition(to: event.state)
     }
 
+    /// Re-evaluate loop playback for the current state. Call after app start
+    /// and after config/asset hot reload, so toggling Loop or swapping a sound
+    /// file takes effect without waiting for a state transition.
+    func syncLoop() {
+        if config.loops.value(for: currentState) {
+            soundPlayer.play(for: currentState, loop: true)
+        } else {
+            soundPlayer.stopLoop()
+        }
+    }
+
     private func applyTransition(to newState: MascotState) {
         guard newState != currentState else { return }
         currentState = newState
         characterController.transitionTo(newState)
-        soundPlayer.play(for: newState)
+        soundPlayer.play(for: newState, loop: config.loops.value(for: newState))
 
         let speech: String
         switch newState {

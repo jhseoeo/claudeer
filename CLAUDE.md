@@ -61,7 +61,8 @@ AssetStore (~/Library/Application Support/Claudeer/)
 - **Pure stdlib** on both sides — no external Swift packages, no Python pip dependencies
 - SwiftUI is used for two surfaces: the menu bar popover (`MenuBarController`) and the Preferences window (`PreferencesView`). Everything else (overlay, sprite, speech bubble) is AppKit. Combine appears only via SwiftUI's `ObservableObject` for view refresh — engine notifications use a plain callback (`AssetStore.onAssetsChanged`)
 - `MascotState` raw values map directly to sprite/sound filenames AND to the `state` field on the wire: `idle.{gif,png,jpg,apng}`, `working.{gif,png,jpg,apng}` (sprites), `idle.{wav,mp3,...}` / `working.{wav,mp3,...}` (sounds)
-- A sound + speech bubble only fire on actual state transitions (idle↔working). Repeated events at the same state are deduped in `EventManager.applyTransition`
+- A speech bubble only fires on actual state transitions (idle↔working). Repeated events at the same state are deduped in `EventManager.applyTransition`
+- Sounds default to one-shot at transition. Per-state `loops` flag in config (set via Preferences checkbox) makes the sound loop while in that state; transitioning out stops it. `EventManager.syncLoop()` re-evaluates the current state's loop after startup and after hot reload, so toggling the checkbox or swapping the file takes effect immediately
 - User assets live in `~/Library/Application Support/Claudeer/{sprites,sounds,config.json}` and are managed by `AssetStore` (the single source of truth for asset paths and config). Nothing is bundled in `Sources/Claudeer/Resources/` — that directory has been removed
 
 ## Plugin Structure

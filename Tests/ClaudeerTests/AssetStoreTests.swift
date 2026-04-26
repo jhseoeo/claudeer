@@ -138,7 +138,8 @@ final class AssetStoreTests: XCTestCase {
     func testInitLoadsExistingConfig() throws {
         let custom = SpeakiConfig(
             defaultArea: "top",
-            speeches: Speeches(idle: "A", working: "B")
+            speeches: Speeches(idle: "A", working: "B"),
+            loops: LoopSettings(idle: true, working: false)
         )
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         let configURL = tempDir.appendingPathComponent("config.json")
@@ -147,6 +148,28 @@ final class AssetStoreTests: XCTestCase {
         let store = AssetStore(baseDirectory: tempDir)
         XCTAssertEqual(store.config.defaultArea, "top")
         XCTAssertEqual(store.config.speeches.idle, "A")
+        XCTAssertTrue(store.config.loops.idle)
+    }
+
+    func testUpdateLoopPersistsAndPreservesSpeeches() throws {
+        let store = AssetStore(baseDirectory: tempDir)
+        store.updateSpeech(for: .idle, text: "Custom idle")
+        store.updateLoop(for: .working, to: true)
+
+        let reloaded = SpeakiConfig.load(from: store.configURL)
+        XCTAssertEqual(reloaded.speeches.idle, "Custom idle")
+        XCTAssertTrue(reloaded.loops.working)
+        XCTAssertFalse(reloaded.loops.idle)
+    }
+
+    func testUpdateSpeechPreservesLoops() throws {
+        let store = AssetStore(baseDirectory: tempDir)
+        store.updateLoop(for: .idle, to: true)
+        store.updateSpeech(for: .working, text: "Hi")
+
+        let reloaded = SpeakiConfig.load(from: store.configURL)
+        XCTAssertTrue(reloaded.loops.idle)
+        XCTAssertEqual(reloaded.speeches.working, "Hi")
     }
 
     func testUpdateSpeechPersistsToDisk() throws {

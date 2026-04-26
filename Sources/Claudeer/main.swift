@@ -51,12 +51,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             config: store.config
         )
         eventManager?.startPIDMonitoring()
+        eventManager?.syncLoop()
 
         store.onAssetsChanged = { [weak self] in
             guard let self = self, let store = self.assetStore else { return }
             self.spriteEngine?.loadSprites(from: store.spritesDirectory)
             self.soundPlayer?.loadSounds(from: store.soundsDirectory)
             self.eventManager?.config = store.config
+            self.eventManager?.syncLoop()
         }
 
         eventServer = EventServer()
