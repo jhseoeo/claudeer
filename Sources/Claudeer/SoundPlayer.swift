@@ -5,6 +5,7 @@ class SoundPlayer {
     var volume: Float = 1.0
 
     func loadSounds(from directory: URL) {
+        sounds.removeAll()
         let extensions = ["wav", "mp3", "aiff", "m4a"]
         for eventType in EventType.allCases {
             for ext in extensions {

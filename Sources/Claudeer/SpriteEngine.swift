@@ -25,7 +25,8 @@ class SpriteEngine {
     }
 
     func loadSprites(from directory: URL) {
-        let extensions = ["gif", "apng", "png"]
+        sprites.removeAll()
+        let extensions = ["gif", "apng", "png", "jpg"]
         for state in SpriteState.allCases {
             for ext in extensions {
                 let url = directory.appendingPathComponent("\(state.rawValue).\(ext)")
@@ -36,7 +37,6 @@ class SpriteEngine {
                 }
             }
         }
-        // Ensure idle exists — use first available sprite as fallback
         if sprites[.idle] == nil, let first = sprites.values.first {
             sprites[.idle] = first
         }
