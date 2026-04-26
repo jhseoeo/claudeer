@@ -38,4 +38,11 @@ struct SpeakiConfig: Codable {
         }
         return config
     }
+
+    func save(to url: URL) throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(self)
+        try data.write(to: url)
+    }
 }
