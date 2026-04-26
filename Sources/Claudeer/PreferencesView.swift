@@ -12,6 +12,8 @@ struct PreferencesView: View {
                 soundsSection
                 Divider()
                 speechesSection
+                Divider()
+                movementSection
             }
             .padding(20)
         }
@@ -55,6 +57,38 @@ struct PreferencesView: View {
             Text("Speeches").font(.headline)
             ForEach(MascotState.allCases, id: \.self) { state in
                 SpeechRow(assetStore: assetStore, state: state, label: state.displayName)
+            }
+        }
+    }
+
+    private var movementSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Movement").font(.headline)
+            ForEach(MascotState.allCases, id: \.self) { state in
+                HStack {
+                    Text(state.displayName)
+                        .frame(width: 80, alignment: .leading)
+                    Toggle("Move while \(state.rawValue)", isOn: Binding(
+                        get: { assetStore.config.movements.value(for: state) },
+                        set: { assetStore.updateMovement(for: state, to: $0) }
+                    ))
+                    .toggleStyle(.checkbox)
+                    Spacer()
+                }
+            }
+            HStack {
+                Text("Speed")
+                    .frame(width: 80, alignment: .leading)
+                Slider(
+                    value: Binding(
+                        get: { assetStore.config.speed },
+                        set: { assetStore.updateSpeed($0) }
+                    ),
+                    in: SpeakiConfig.speedRange,
+                    minimumValueLabel: Text("Slow").font(.caption).foregroundColor(.secondary),
+                    maximumValueLabel: Text("Fast").font(.caption).foregroundColor(.secondary),
+                    label: { EmptyView() }
+                )
             }
         }
     }

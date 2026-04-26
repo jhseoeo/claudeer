@@ -13,7 +13,12 @@ final class ConfigTests: XCTestCase {
           "loops": {
             "idle": false,
             "working": true
-          }
+          },
+          "movements": {
+            "idle": false,
+            "working": true
+          },
+          "speed": 3.5
         }
         """.data(using: .utf8)!
 
@@ -23,6 +28,9 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(config.speeches.working, "On it!")
         XCTAssertFalse(config.loops.idle)
         XCTAssertTrue(config.loops.working)
+        XCTAssertFalse(config.movements.idle)
+        XCTAssertTrue(config.movements.working)
+        XCTAssertEqual(config.speed, 3.5)
     }
 
     func testParseConfigWithoutLoopsDefaultsOff() throws {
@@ -38,6 +46,31 @@ final class ConfigTests: XCTestCase {
         XCTAssertFalse(config.loops.working)
     }
 
+    func testParseConfigWithoutMovementsDefaultsAllOn() throws {
+        let json = """
+        {
+          "default_area": "bottom",
+          "speeches": { "idle": "a", "working": "b" }
+        }
+        """.data(using: .utf8)!
+
+        let config = try JSONDecoder().decode(SpeakiConfig.self, from: json)
+        XCTAssertTrue(config.movements.idle)
+        XCTAssertTrue(config.movements.working)
+    }
+
+    func testParseConfigWithoutSpeedDefaultsToDefault() throws {
+        let json = """
+        {
+          "default_area": "bottom",
+          "speeches": { "idle": "a", "working": "b" }
+        }
+        """.data(using: .utf8)!
+
+        let config = try JSONDecoder().decode(SpeakiConfig.self, from: json)
+        XCTAssertEqual(config.speed, SpeakiConfig.defaultSpeed)
+    }
+
     func testDefaultConfig() {
         let config = SpeakiConfig.default
         XCTAssertEqual(config.defaultArea, "bottom")
@@ -45,13 +78,18 @@ final class ConfigTests: XCTestCase {
         XCTAssertFalse(config.speeches.working.isEmpty)
         XCTAssertFalse(config.loops.idle)
         XCTAssertFalse(config.loops.working)
+        XCTAssertTrue(config.movements.idle)
+        XCTAssertTrue(config.movements.working)
+        XCTAssertEqual(config.speed, SpeakiConfig.defaultSpeed)
     }
 
     func testSaveAndReload() throws {
         let original = SpeakiConfig(
             defaultArea: "top",
             speeches: Speeches(idle: "Halp", working: "Yo"),
-            loops: LoopSettings(idle: true, working: false)
+            loops: LoopSettings(idle: true, working: false),
+            movements: MovementSettings(idle: false, working: true),
+            speed: 4.0
         )
         let tmpURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("claudeer-test-\(UUID().uuidString).json")
@@ -65,5 +103,8 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(reloaded.speeches.working, "Yo")
         XCTAssertTrue(reloaded.loops.idle)
         XCTAssertFalse(reloaded.loops.working)
+        XCTAssertFalse(reloaded.movements.idle)
+        XCTAssertTrue(reloaded.movements.working)
+        XCTAssertEqual(reloaded.speed, 4.0)
     }
 }

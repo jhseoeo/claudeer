@@ -61,6 +61,14 @@ open dist/Claudeer.app
 
 **Speeches** — 각 상태로 전이할 때 표시될 말풍선 텍스트. 텍스트 필드 편집 후 포커스 해제하면 자동 저장.
 
+**Movement** — 캐릭터의 화면 내 이동을 제어.
+
+| 항목 | 의미 |
+|------|------|
+| `Move while idle` | idle 상태일 때 어슬렁거릴지 (체크 해제 시 그 상태에선 정지) |
+| `Move while working` | working 상태일 때 어슬렁거릴지 |
+| `Speed` | 글로벌 이동 속도 슬라이더 (Slow ↔ Fast). 슬라이더 움직이면 즉시 반영 |
+
 ### Area Presets
 
 Choose where the mascot roams via the menu bar icon (🐾):

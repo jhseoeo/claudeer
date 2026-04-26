@@ -86,9 +86,7 @@ class AssetStore: ObservableObject {
         case .working:
             updated = Speeches(idle: s.idle, working: text)
         }
-        config = SpeakiConfig(defaultArea: config.defaultArea, speeches: updated, loops: config.loops)
-        try? config.save(to: configURL)
-        notify()
+        setConfig(speeches: updated)
     }
 
     func updateLoop(for state: MascotState, to value: Bool) {
@@ -100,7 +98,38 @@ class AssetStore: ObservableObject {
         case .working:
             updated = LoopSettings(idle: l.idle, working: value)
         }
-        config = SpeakiConfig(defaultArea: config.defaultArea, speeches: config.speeches, loops: updated)
+        setConfig(loops: updated)
+    }
+
+    func updateMovement(for state: MascotState, to value: Bool) {
+        let m = config.movements
+        let updated: MovementSettings
+        switch state {
+        case .idle:
+            updated = MovementSettings(idle: value, working: m.working)
+        case .working:
+            updated = MovementSettings(idle: m.idle, working: value)
+        }
+        setConfig(movements: updated)
+    }
+
+    func updateSpeed(_ value: Double) {
+        setConfig(speed: value)
+    }
+
+    private func setConfig(
+        speeches: Speeches? = nil,
+        loops: LoopSettings? = nil,
+        movements: MovementSettings? = nil,
+        speed: Double? = nil
+    ) {
+        config = SpeakiConfig(
+            defaultArea: config.defaultArea,
+            speeches: speeches ?? config.speeches,
+            loops: loops ?? config.loops,
+            movements: movements ?? config.movements,
+            speed: speed ?? config.speed
+        )
         try? config.save(to: configURL)
         notify()
     }

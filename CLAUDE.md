@@ -44,13 +44,13 @@ Claude Code Hooks (Python) ──(Unix Socket)──> Swift App
                               MascotWindow (transparent NSWindow, click-through)
 
 AssetStore (~/Library/Application Support/Claudeer/)
-  ├── feeds: SpriteEngine.loadSprites(...) / SoundPlayer.loadSounds(...) / EventManager.config
+  ├── feeds: SpriteEngine.loadSprites(...) / SoundPlayer.loadSounds(...) / EventManager.config / CharacterController.setMovement+setSpeed
   └── edited via: PreferencesWindow → PreferencesView (SwiftUI)
 ```
 
 **Startup wiring** (`main.swift`): AssetStore → MascotWindow → SpriteEngine → SpeechBubble → SoundPlayer → CharacterController → EventManager → EventServer → MenuBarController (with assetStore reference). Order matters. AssetStore is built first because it owns the App Support directory and config.
 
-**Hot reload**: `AssetStore.onAssetsChanged` is set in `main.swift` to call `SpriteEngine.loadSprites`, `SoundPlayer.loadSounds`, and update `EventManager.config` whenever the user registers/clears/edits via Preferences. No app restart needed.
+**Hot reload**: `AssetStore.onAssetsChanged` is set in `main.swift` to call `SpriteEngine.loadSprites`, `SoundPlayer.loadSounds`, update `EventManager.config`, and re-apply `CharacterController.setMovement` + `setSpeed` whenever the user registers/clears/edits via Preferences. No app restart needed.
 
 **Thread model**: EventServer accept loop runs on a background GCD queue. All events are dispatched to main thread via `DispatchQueue.main.async` before touching UI. `serverFD` and `running` are protected by NSLock.
 
@@ -63,6 +63,7 @@ AssetStore (~/Library/Application Support/Claudeer/)
 - `MascotState` raw values map directly to sprite/sound filenames AND to the `state` field on the wire: `idle.{gif,png,jpg,apng}`, `working.{gif,png,jpg,apng}` (sprites), `idle.{wav,mp3,...}` / `working.{wav,mp3,...}` (sounds)
 - A speech bubble only fires on actual state transitions (idle↔working). Repeated events at the same state are deduped in `EventManager.applyTransition`
 - Sounds default to one-shot at transition. Per-state `loops` flag in config (set via Preferences checkbox) makes the sound loop while in that state; transitioning out stops it. `EventManager.syncLoop()` re-evaluates the current state's loop after startup and after hot reload, so toggling the checkbox or swapping the file takes effect immediately
+- Movement is gated per-state via `movements: { idle, working }` in config (default both `true`). `CharacterController.tick()` short-circuits when `movements.value(for: currentState)` is false. Global `speed` is a Double in config (range 0.5–6.0 px/frame at 30fps, default 2.0). Both apply on hot reload via `setMovement` / `setSpeed`
 - User assets live in `~/Library/Application Support/Claudeer/{sprites,sounds,config.json}` and are managed by `AssetStore` (the single source of truth for asset paths and config). Nothing is bundled in `Sources/Claudeer/Resources/` — that directory has been removed
 
 ## Plugin Structure

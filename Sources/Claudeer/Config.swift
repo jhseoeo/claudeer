@@ -19,21 +19,44 @@ struct LoopSettings: Codable {
     static let off = LoopSettings(idle: false, working: false)
 }
 
+struct MovementSettings: Codable {
+    let idle: Bool
+    let working: Bool
+
+    func value(for state: MascotState) -> Bool {
+        switch state {
+        case .idle: return idle
+        case .working: return working
+        }
+    }
+
+    static let allOn = MovementSettings(idle: true, working: true)
+}
+
 struct SpeakiConfig: Codable {
     let defaultArea: String
     let speeches: Speeches
     let loops: LoopSettings
+    let movements: MovementSettings
+    let speed: Double
+
+    static let defaultSpeed: Double = 2.0
+    static let speedRange: ClosedRange<Double> = 0.5...6.0
 
     enum CodingKeys: String, CodingKey {
         case defaultArea = "default_area"
         case speeches
         case loops
+        case movements
+        case speed
     }
 
-    init(defaultArea: String, speeches: Speeches, loops: LoopSettings) {
+    init(defaultArea: String, speeches: Speeches, loops: LoopSettings, movements: MovementSettings, speed: Double) {
         self.defaultArea = defaultArea
         self.speeches = speeches
         self.loops = loops
+        self.movements = movements
+        self.speed = speed
     }
 
     init(from decoder: Decoder) throws {
@@ -41,6 +64,8 @@ struct SpeakiConfig: Codable {
         self.defaultArea = try container.decode(String.self, forKey: .defaultArea)
         self.speeches = try container.decode(Speeches.self, forKey: .speeches)
         self.loops = try container.decodeIfPresent(LoopSettings.self, forKey: .loops) ?? .off
+        self.movements = try container.decodeIfPresent(MovementSettings.self, forKey: .movements) ?? .allOn
+        self.speed = try container.decodeIfPresent(Double.self, forKey: .speed) ?? Self.defaultSpeed
     }
 
     static let `default` = SpeakiConfig(
@@ -49,7 +74,9 @@ struct SpeakiConfig: Codable {
             idle: "Need your input!",
             working: "On it!"
         ),
-        loops: .off
+        loops: .off,
+        movements: .allOn,
+        speed: defaultSpeed
     )
 
     static func load(from url: URL) -> SpeakiConfig {

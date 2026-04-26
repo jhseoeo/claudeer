@@ -139,7 +139,9 @@ final class AssetStoreTests: XCTestCase {
         let custom = SpeakiConfig(
             defaultArea: "top",
             speeches: Speeches(idle: "A", working: "B"),
-            loops: LoopSettings(idle: true, working: false)
+            loops: LoopSettings(idle: true, working: false),
+            movements: MovementSettings(idle: false, working: true),
+            speed: 4.0
         )
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         let configURL = tempDir.appendingPathComponent("config.json")
@@ -149,6 +151,9 @@ final class AssetStoreTests: XCTestCase {
         XCTAssertEqual(store.config.defaultArea, "top")
         XCTAssertEqual(store.config.speeches.idle, "A")
         XCTAssertTrue(store.config.loops.idle)
+        XCTAssertFalse(store.config.movements.idle)
+        XCTAssertTrue(store.config.movements.working)
+        XCTAssertEqual(store.config.speed, 4.0)
     }
 
     func testUpdateLoopPersistsAndPreservesSpeeches() throws {
@@ -170,6 +175,31 @@ final class AssetStoreTests: XCTestCase {
         let reloaded = SpeakiConfig.load(from: store.configURL)
         XCTAssertTrue(reloaded.loops.idle)
         XCTAssertEqual(reloaded.speeches.working, "Hi")
+    }
+
+    func testUpdateMovementPersistsAndPreservesOthers() throws {
+        let store = AssetStore(baseDirectory: tempDir)
+        store.updateSpeech(for: .working, text: "Yo")
+        store.updateLoop(for: .idle, to: true)
+        store.updateMovement(for: .idle, to: false)
+
+        let reloaded = SpeakiConfig.load(from: store.configURL)
+        XCTAssertFalse(reloaded.movements.idle)
+        XCTAssertTrue(reloaded.movements.working)
+        XCTAssertEqual(reloaded.speeches.working, "Yo")
+        XCTAssertTrue(reloaded.loops.idle)
+    }
+
+    func testUpdateSpeedPersistsAndPreservesOthers() throws {
+        let store = AssetStore(baseDirectory: tempDir)
+        store.updateLoop(for: .working, to: true)
+        store.updateMovement(for: .idle, to: false)
+        store.updateSpeed(3.0)
+
+        let reloaded = SpeakiConfig.load(from: store.configURL)
+        XCTAssertEqual(reloaded.speed, 3.0)
+        XCTAssertTrue(reloaded.loops.working)
+        XCTAssertFalse(reloaded.movements.idle)
     }
 
     func testUpdateSpeechPersistsToDisk() throws {
