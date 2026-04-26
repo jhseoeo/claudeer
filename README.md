@@ -13,11 +13,13 @@ speech bubbles, and sounds when Claude Code needs your attention.
 
 ## Setup
 
-### 1. Build
+### 1. Build the app bundle
 
 ```bash
-swift build -c release
+./scripts/build-app.sh
 ```
+
+`dist/Claudeer.app` 가 만들어집니다 (메뉴바 앱, dock 아이콘 없음). `swift build -c release` 단독으로는 CLI 바이너리만 나오니 이 스크립트를 쓰는 걸 권장합니다.
 
 ### 2. Install as Claude Code plugin
 
@@ -28,8 +30,10 @@ claude plugin add /path/to/claudeer
 ### 3. Run the app
 
 ```bash
-.build/release/Claudeer
+open dist/Claudeer.app
 ```
+
+또는 `cp -R dist/Claudeer.app /Applications/` 로 설치 후 Launchpad/Spotlight에서 실행.
 
 메뉴바에 🐾 아이콘이 나타나면 정상 실행. 캐릭터는 스프라이트를 등록하기 전까지 화면에 안 보입니다.
 
