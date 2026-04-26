@@ -1,8 +1,0 @@
-{
-  "default_area": "bottom",
-  "speeches": {
-    "session_start": "Hello!",
-    "need_input": "Hey, need your input!",
-    "session_end": "Bye!"
-  }
-}

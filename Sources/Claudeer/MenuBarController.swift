@@ -4,7 +4,9 @@ import SwiftUI
 class MenuBarController: NSObject {
     private var statusItem: NSStatusItem?
     private var popover: NSPopover?
+    private var preferencesWindow: PreferencesWindow?
 
+    var assetStore: AssetStore?
     var onAreaChanged: ((AreaPreset) -> Void)?
     var onVolumeChanged: ((Float) -> Void)?
     var currentPreset: AreaPreset = .bottom
@@ -17,7 +19,7 @@ class MenuBarController: NSObject {
 
         let view = MenuBarPopoverView(controller: self)
         popover = NSPopover()
-        popover?.contentSize = NSSize(width: 220, height: 280)
+        popover?.contentSize = NSSize(width: 220, height: 320)
         popover?.behavior = .transient
         popover?.contentViewController = NSHostingController(rootView: view)
     }
@@ -29,6 +31,15 @@ class MenuBarController: NSObject {
         } else {
             popover?.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         }
+    }
+
+    func openPreferences() {
+        guard let store = assetStore else { return }
+        if preferencesWindow == nil {
+            preferencesWindow = PreferencesWindow(assetStore: store)
+        }
+        popover?.performClose(nil)
+        preferencesWindow?.showAndFocus()
     }
 }
 
@@ -68,6 +79,10 @@ struct MenuBarPopoverView: View {
             }
 
             Divider()
+
+            Button("Preferences...") {
+                controller.openPreferences()
+            }
 
             Button("Quit") {
                 NSApp.terminate(nil)
