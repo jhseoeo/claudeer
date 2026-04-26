@@ -10,9 +10,6 @@ let package = Package(
         .executableTarget(
             name: "Claudeer",
             path: "Sources/Claudeer",
-            resources: [
-                .copy("Resources")
-            ],
             linkerSettings: [
                 .linkedFramework("AppKit"),
                 .linkedFramework("AVFoundation"),

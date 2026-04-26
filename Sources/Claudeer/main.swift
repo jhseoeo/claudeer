@@ -8,72 +8,66 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var eventManager: EventManager?
     var soundPlayer: SoundPlayer?
     var speechBubble: SpeechBubbleView?
-    var config: SpeakiConfig = .default
     var menuBarController: MenuBarController?
+    var assetStore: AssetStore?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
 
-        // Load config
-        if let configURL = Bundle.module.url(forResource: "Resources", withExtension: nil)?
-            .appendingPathComponent("config.json") {
-            config = SpeakiConfig.load(from: configURL)
-        }
+        let store = AssetStore(baseDirectory: AssetStore.defaultBaseDirectory)
+        assetStore = store
 
-        // Setup window
         mascotWindow = MascotWindow()
 
         let contentView = NSView(frame: mascotWindow!.frame)
         contentView.wantsLayer = true
 
-        // Setup sprite
         let spriteSize = NSRect(x: 100, y: 100, width: 64, height: 64)
         spriteEngine = SpriteEngine(frame: spriteSize)
         contentView.addSubview(spriteEngine!.view)
 
-        // Setup speech bubble
         speechBubble = SpeechBubbleView()
         speechBubble?.isHidden = true
         contentView.addSubview(speechBubble!)
 
         mascotWindow?.contentView = contentView
 
-        // Load resources
-        if let resourceURL = Bundle.module.url(forResource: "Resources", withExtension: nil) {
-            spriteEngine?.loadSprites(from: resourceURL.appendingPathComponent("sprites"))
+        spriteEngine?.loadSprites(from: store.spritesDirectory)
+        soundPlayer = SoundPlayer()
+        soundPlayer?.loadSounds(from: store.soundsDirectory)
 
-            soundPlayer = SoundPlayer()
-            soundPlayer?.loadSounds(from: resourceURL.appendingPathComponent("sounds"))
-        }
-
-        // Setup movement
         characterController = CharacterController(spriteEngine: spriteEngine!)
         if let screen = NSScreen.main {
-            let preset = AreaPreset(rawValue: config.defaultArea) ?? .bottom
+            let preset = AreaPreset(rawValue: store.config.defaultArea) ?? .bottom
             characterController?.setArea(preset, screenSize: screen.frame.size)
         }
         characterController?.start()
 
-        // Setup event manager
         eventManager = EventManager(
             characterController: characterController!,
-            soundPlayer: soundPlayer ?? SoundPlayer(),
+            soundPlayer: soundPlayer!,
             speechBubble: speechBubble!,
             spriteEngine: spriteEngine!,
-            config: config
+            config: store.config
         )
         eventManager?.startPIDMonitoring()
 
-        // Start socket server
+        store.onAssetsChanged = { [weak self] in
+            guard let self = self, let store = self.assetStore else { return }
+            self.spriteEngine?.loadSprites(from: store.spritesDirectory)
+            self.soundPlayer?.loadSounds(from: store.soundsDirectory)
+            self.eventManager?.config = store.config
+        }
+
         eventServer = EventServer()
         eventServer?.onEvent = { [weak self] event in
             self?.eventManager?.handleEvent(event)
         }
         eventServer?.start()
 
-        // Setup menu bar
         menuBarController = MenuBarController()
-        menuBarController?.currentPreset = AreaPreset(rawValue: config.defaultArea) ?? .bottom
+        menuBarController?.assetStore = store
+        menuBarController?.currentPreset = AreaPreset(rawValue: store.config.defaultArea) ?? .bottom
         menuBarController?.onAreaChanged = { [weak self] preset in
             if let screen = NSScreen.main {
                 self?.characterController?.setArea(preset, screenSize: screen.frame.size)
