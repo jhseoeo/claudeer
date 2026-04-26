@@ -42,9 +42,15 @@ Claude Code Hooks (Python) ──(Unix Socket)──> Swift App
                               SpriteEngine
                                     │
                               MascotWindow (transparent NSWindow, click-through)
+
+AssetStore (~/Library/Application Support/Claudeer/)
+  ├── feeds: SpriteEngine.loadSprites(...) / SoundPlayer.loadSounds(...) / EventManager.config
+  └── edited via: PreferencesWindow → PreferencesView (SwiftUI)
 ```
 
-**Startup wiring** (`main.swift`): Config → MascotWindow → SpriteEngine → SpeechBubble → SoundPlayer → CharacterController → EventManager → EventServer → MenuBarController. Order matters.
+**Startup wiring** (`main.swift`): AssetStore → MascotWindow → SpriteEngine → SpeechBubble → SoundPlayer → CharacterController → EventManager → EventServer → MenuBarController (with assetStore reference). Order matters. AssetStore is built first because it owns the App Support directory and config.
+
+**Hot reload**: `AssetStore.onAssetsChanged` is set in `main.swift` to call `SpriteEngine.loadSprites`, `SoundPlayer.loadSounds`, and update `EventManager.config` whenever the user registers/clears/edits via Preferences. No app restart needed.
 
 **Thread model**: EventServer accept loop runs on a background GCD queue. All events are dispatched to main thread via `DispatchQueue.main.async` before touching UI. `serverFD` and `running` are protected by NSLock.
 
@@ -53,10 +59,10 @@ Claude Code Hooks (Python) ──(Unix Socket)──> Swift App
 ## Key Conventions
 
 - **Pure stdlib** on both sides — no external Swift packages, no Python pip dependencies
-- SwiftUI is only used for the menu bar popover (`MenuBarController`); everything else is AppKit
-- Sprite states map directly to filenames: `idle.gif`, `walk.gif`, `alert.gif`
+- SwiftUI is used for two surfaces: the menu bar popover (`MenuBarController`) and the Preferences window (`PreferencesView`). Everything else (overlay, sprite, speech bubble) is AppKit. Combine appears only via SwiftUI's `ObservableObject` for view refresh — engine notifications use a plain callback (`AssetStore.onAssetsChanged`)
+- Sprite states map directly to filenames: `idle.gif`, `walk.gif`, `alert.gif` (also `.png`/`.jpg`/`.apng`)
 - `EventType` raw values match JSON event names and sound filenames: `session_start`, `need_input`, `session_end`
-- Resources live in `Sources/Claudeer/Resources/` and are accessed via `Bundle.module`
+- User assets live in `~/Library/Application Support/Claudeer/{sprites,sounds,config.json}` and are managed by `AssetStore` (the single source of truth for asset paths and config). Nothing is bundled in `Sources/Claudeer/Resources/` — that directory has been removed
 
 ## Plugin Structure
 
@@ -73,4 +79,11 @@ hooks/scripts/notify.py        # Hook script — uses ${CLAUDE_PLUGIN_ROOT} for 
 - Socket path is hardcoded to `/tmp/claudeer.sock` in both `EventServer.swift` and `notify.py` — change both if modifying
 - `MascotWindow.ignoresMouseEvents = true` makes the entire overlay click-through; partial hit-testing would require overriding `NSView.hitTest(_:)`
 - `CharacterController` freezes movement during alert state (`isAlerted` flag) so speech bubbles stay aligned with the character
-- `Sources/Claudeer/Resources/sounds/` directory doesn't exist by default — users must create it and add their own sound files
+- `AssetStore` creates the App Support directories on init — first launch is silent, no manual `mkdir` needed
+- APNG has no system-defined `UTType` on macOS, so `.apng` files are not selectable in the Preferences file picker. Users should rename `.apng` → `.png` (PNG-compatible). Documented in README
+- When changing `AssetStore` slot semantics, remember `SpriteEngine.spriteExtensions` and `SoundPlayer` extension lists must match — both are searched in the same order at load time
+
+## Reference Docs
+
+- Asset registration design: `docs/superpowers/specs/2026-04-26-asset-registration-design.md`
+- Asset registration plan: `docs/superpowers/plans/2026-04-26-asset-registration.md`
