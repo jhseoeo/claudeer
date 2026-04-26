@@ -1,8 +1,10 @@
+import Combine
 import Foundation
 
-class AssetStore {
+class AssetStore: ObservableObject {
     let baseDirectory: URL
-    private(set) var config: SpeakiConfig
+    @Published private(set) var config: SpeakiConfig
+    @Published private(set) var changeVersion: Int = 0
     var onAssetsChanged: (() -> Void)?
 
     var spritesDirectory: URL { baseDirectory.appendingPathComponent("sprites") }
@@ -54,7 +56,7 @@ class AssetStore {
         let ext = source.pathExtension.lowercased()
         let dest = spritesDirectory.appendingPathComponent("\(state.rawValue).\(ext)")
         try FileManager.default.copyItem(at: source, to: dest)
-        onAssetsChanged?()
+        notify()
     }
 
     func registerSound(source: URL, for event: EventType) throws {
@@ -62,17 +64,17 @@ class AssetStore {
         let ext = source.pathExtension.lowercased()
         let dest = soundsDirectory.appendingPathComponent("\(event.rawValue).\(ext)")
         try FileManager.default.copyItem(at: source, to: dest)
-        onAssetsChanged?()
+        notify()
     }
 
     func clearSprite(for state: SpriteState) {
         clearSpriteFiles(for: state)
-        onAssetsChanged?()
+        notify()
     }
 
     func clearSound(for event: EventType) {
         clearSoundFiles(for: event)
-        onAssetsChanged?()
+        notify()
     }
 
     func updateSpeech(for event: EventType, text: String) {
@@ -88,7 +90,7 @@ class AssetStore {
         }
         config = SpeakiConfig(defaultArea: config.defaultArea, speeches: updated)
         try? config.save(to: configURL)
-        onAssetsChanged?()
+        notify()
     }
 
     private func clearSpriteFiles(for state: SpriteState) {
@@ -103,5 +105,10 @@ class AssetStore {
             let url = soundsDirectory.appendingPathComponent("\(event.rawValue).\(ext)")
             try? FileManager.default.removeItem(at: url)
         }
+    }
+
+    private func notify() {
+        changeVersion += 1
+        onAssetsChanged?()
     }
 }
