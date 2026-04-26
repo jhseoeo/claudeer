@@ -2,8 +2,9 @@
 
 Desktop mascot app for macOS that reacts to Claude Code session events.
 
-A sprite character roams your screen and alerts you with animations,
-speech bubbles, and sounds when Claude Code needs your attention.
+A sprite character roams your screen and changes state — `idle` while Claude is
+waiting for your input, `working` while Claude is processing — with animations,
+speech bubbles, and sounds at each transition.
 
 ## Requirements
 
@@ -41,23 +42,20 @@ open dist/Claudeer.app
 
 🐾 → "Preferences..." 클릭하면 설정 윈도우가 열립니다. 등록한 파일은 `~/Library/Application Support/Claudeer/`에 복사되며, 변경 즉시 반영됩니다 (재시작 불필요).
 
-**Sprites** — Idle / Walk / Alert. 형식: PNG, JPG, GIF.
+**Sprites** — 두 가지 상태. 형식: PNG, JPG, GIF.
 
-| Slot | 용도 |
+| Slot | 의미 |
 |------|------|
-| `idle` | 기본 정지 상태 (없으면 캐릭터 안 보임) |
-| `walk` | 이동 중 애니메이션 |
-| `alert` | 이벤트 발생 시 반응 |
-
-`idle`만 필수, 나머지는 없으면 `idle`로 대체.
+| `idle` | Claude가 유저 입력을 기다리는 상태 (필수, 없으면 캐릭터 안 보임) |
+| `working` | 프롬프트를 받아 처리 중인 상태 (없으면 `idle`로 대체) |
 
 > **GIF vs APNG**: GIF는 1비트 알파만 지원해서 외곽선이 들쑥날쑥할 수 있어요. 부드러운 외곽선이 필요하면 **APNG**를 쓰세요. 변환은 `ezgif.com` 또는 `ffmpeg -i frame_%03d.png -plays 0 out.apng`.
 >
 > **APNG 등록 팁**: macOS에 APNG 시스템 UTType이 없어서 파일 피커에서 `.apng` 확장자가 안 보일 수 있어요. APNG는 PNG와 호환되니까 `mv myanim.apng myanim.png` 으로 이름만 바꿔서 등록하면 애니메이션이 정상 재생됩니다.
 
-**Sounds** — Session Start / Need Input / Session End. 형식: WAV, MP3, AIFF, M4A. 전부 선택사항.
+**Sounds** — `idle` / `working` 전이 시점에 재생. 형식: WAV, MP3, AIFF, M4A. 전부 선택사항.
 
-**Speeches** — 각 이벤트의 말풍선 텍스트. 텍스트 필드 편집 후 포커스 해제하면 자동 저장.
+**Speeches** — 각 상태로 전이할 때 표시될 말풍선 텍스트. 텍스트 필드 편집 후 포커스 해제하면 자동 저장.
 
 ### Area Presets
 
@@ -73,6 +71,10 @@ Choose where the mascot roams via the menu bar icon (🐾):
 ## How It Works
 
 1. The app opens a Unix socket at `/tmp/claudeer.sock`
-2. Claude Code hooks (installed via plugin) send JSON events to this socket
-3. The app reacts with character animations, speech bubbles, and sounds
+2. Claude Code hooks (installed via plugin) send state transitions to this socket:
+   - `SessionStart` → `idle` (등록만, 첫 진입은 무음)
+   - `UserPromptSubmit` → `working`
+   - `Stop` → `idle`
+   - `Notification` → `idle`
+3. 상태가 실제로 바뀌는 순간에만 스프라이트 교체 + 사운드 + 말풍선
 4. If the app isn't running, hooks silently fail (no impact on Claude Code)

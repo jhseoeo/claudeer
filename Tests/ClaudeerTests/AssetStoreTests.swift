@@ -48,21 +48,21 @@ final class AssetStoreTests: XCTestCase {
 
     func testCurrentSpriteURLPicksFirstMatchingExtension() throws {
         let store = AssetStore(baseDirectory: tempDir)
-        let pngFile = store.spritesDirectory.appendingPathComponent("walk.png")
+        let pngFile = store.spritesDirectory.appendingPathComponent("working.png")
         try Data("fake".utf8).write(to: pngFile)
-        XCTAssertEqual(store.currentSpriteURL(for: .walk), pngFile)
+        XCTAssertEqual(store.currentSpriteURL(for: .working), pngFile)
     }
 
     func testCurrentSoundURLReturnsNilWhenMissing() {
         let store = AssetStore(baseDirectory: tempDir)
-        XCTAssertNil(store.currentSoundURL(for: .needInput))
+        XCTAssertNil(store.currentSoundURL(for: .working))
     }
 
     func testCurrentSoundURLFindsExistingFile() throws {
         let store = AssetStore(baseDirectory: tempDir)
-        let soundFile = store.soundsDirectory.appendingPathComponent("session_start.wav")
+        let soundFile = store.soundsDirectory.appendingPathComponent("idle.wav")
         try Data("fake".utf8).write(to: soundFile)
-        XCTAssertEqual(store.currentSoundURL(for: .sessionStart), soundFile)
+        XCTAssertEqual(store.currentSoundURL(for: .idle), soundFile)
     }
 
     func testRegisterSpriteCopiesFile() throws {
@@ -96,9 +96,9 @@ final class AssetStoreTests: XCTestCase {
         let source = tempDir.appendingPathComponent("ding.wav")
         try Data("audio".utf8).write(to: source)
 
-        try store.registerSound(source: source, for: .needInput)
+        try store.registerSound(source: source, for: .working)
 
-        let dest = store.soundsDirectory.appendingPathComponent("need_input.wav")
+        let dest = store.soundsDirectory.appendingPathComponent("working.wav")
         XCTAssertTrue(FileManager.default.fileExists(atPath: dest.path))
     }
 
@@ -115,16 +115,16 @@ final class AssetStoreTests: XCTestCase {
 
     func testClearSpriteWhenAbsentIsNoOp() {
         let store = AssetStore(baseDirectory: tempDir)
-        store.clearSprite(for: .alert)
-        XCTAssertNil(store.currentSpriteURL(for: .alert))
+        store.clearSprite(for: .working)
+        XCTAssertNil(store.currentSpriteURL(for: .working))
     }
 
     func testClearSoundRemovesFile() throws {
         let store = AssetStore(baseDirectory: tempDir)
-        let file = store.soundsDirectory.appendingPathComponent("session_end.mp3")
+        let file = store.soundsDirectory.appendingPathComponent("idle.mp3")
         try Data("data".utf8).write(to: file)
 
-        store.clearSound(for: .sessionEnd)
+        store.clearSound(for: .idle)
 
         XCTAssertFalse(FileManager.default.fileExists(atPath: file.path))
     }
@@ -132,13 +132,13 @@ final class AssetStoreTests: XCTestCase {
     func testInitLoadsDefaultConfigWhenAbsent() {
         let store = AssetStore(baseDirectory: tempDir)
         XCTAssertEqual(store.config.defaultArea, SpeakiConfig.default.defaultArea)
-        XCTAssertEqual(store.config.speeches.sessionStart, SpeakiConfig.default.speeches.sessionStart)
+        XCTAssertEqual(store.config.speeches.idle, SpeakiConfig.default.speeches.idle)
     }
 
     func testInitLoadsExistingConfig() throws {
         let custom = SpeakiConfig(
             defaultArea: "top",
-            speeches: Speeches(sessionStart: "A", needInput: "B", sessionEnd: "C")
+            speeches: Speeches(idle: "A", working: "B")
         )
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         let configURL = tempDir.appendingPathComponent("config.json")
@@ -146,16 +146,16 @@ final class AssetStoreTests: XCTestCase {
 
         let store = AssetStore(baseDirectory: tempDir)
         XCTAssertEqual(store.config.defaultArea, "top")
-        XCTAssertEqual(store.config.speeches.sessionStart, "A")
+        XCTAssertEqual(store.config.speeches.idle, "A")
     }
 
     func testUpdateSpeechPersistsToDisk() throws {
         let store = AssetStore(baseDirectory: tempDir)
-        store.updateSpeech(for: .needInput, text: "Custom message")
+        store.updateSpeech(for: .working, text: "Custom message")
 
         let reloaded = SpeakiConfig.load(from: store.configURL)
-        XCTAssertEqual(reloaded.speeches.needInput, "Custom message")
-        XCTAssertEqual(reloaded.speeches.sessionStart, SpeakiConfig.default.speeches.sessionStart)
+        XCTAssertEqual(reloaded.speeches.working, "Custom message")
+        XCTAssertEqual(reloaded.speeches.idle, SpeakiConfig.default.speeches.idle)
     }
 
     func testOnAssetsChangedFiresAfterRegister() throws {
@@ -184,7 +184,7 @@ final class AssetStoreTests: XCTestCase {
         var fired = 0
         store.onAssetsChanged = { fired += 1 }
 
-        store.updateSpeech(for: .sessionStart, text: "Hi")
+        store.updateSpeech(for: .idle, text: "Hi")
         XCTAssertEqual(fired, 1)
     }
 }

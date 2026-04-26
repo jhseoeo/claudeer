@@ -7,6 +7,7 @@ class EventManager {
     private let spriteEngine: SpriteEngine
     var config: SpeakiConfig
 
+    private var currentState: MascotState = .idle
     private var activeSessions: [String: Int] = [:]
     private var pidCheckTimer: Timer?
 
@@ -25,31 +26,22 @@ class EventManager {
     }
 
     func handleEvent(_ event: SpeakiEvent) {
-        switch event.event {
-        case .sessionStart:
-            if let pid = event.pid {
-                activeSessions[event.sessionId] = pid
-            }
-            react(to: event.event)
-
-        case .needInput:
-            react(to: event.event)
-
-        case .sessionEnd:
-            activeSessions.removeValue(forKey: event.sessionId)
-            react(to: event.event)
+        if let pid = event.pid {
+            activeSessions[event.sessionId] = pid
         }
+        applyTransition(to: event.state)
     }
 
-    private func react(to eventType: EventType) {
-        characterController.triggerAlert()
-        soundPlayer.play(for: eventType)
+    private func applyTransition(to newState: MascotState) {
+        guard newState != currentState else { return }
+        currentState = newState
+        characterController.transitionTo(newState)
+        soundPlayer.play(for: newState)
 
         let speech: String
-        switch eventType {
-        case .sessionStart: speech = config.speeches.sessionStart
-        case .needInput: speech = config.speeches.needInput
-        case .sessionEnd: speech = config.speeches.sessionEnd
+        switch newState {
+        case .idle: speech = config.speeches.idle
+        case .working: speech = config.speeches.working
         }
 
         let spritePos = spriteEngine.position
@@ -75,7 +67,7 @@ class EventManager {
         for (sessionId, pid) in activeSessions {
             if kill(Int32(pid), 0) != 0 {
                 activeSessions.removeValue(forKey: sessionId)
-                react(to: .sessionEnd)
+                applyTransition(to: .idle)
             }
         }
     }

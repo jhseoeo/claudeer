@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Claudeer** is a macOS desktop mascot app + Claude Code plugin. A user-customized sprite character roams the screen and reacts to Claude Code session events (start, need input, end) with animations, speech bubbles, and sounds.
+**Claudeer** is a macOS desktop mascot app + Claude Code plugin. A user-customized sprite character roams the screen and tracks two states — `idle` (waiting for user input) and `working` (Claude is processing) — with animations, speech bubbles, and sounds firing at each transition.
 
 ## Build & Test
 
@@ -18,7 +18,7 @@ swift test --filter ConfigTests # Run a single test suite
 
 Manual socket test (while app is running):
 ```bash
-python3 -c "import socket,json; s=socket.socket(socket.AF_UNIX); s.connect('/tmp/claudeer.sock'); s.send(json.dumps({'event':'need_input','session_id':'test'}).encode()+b'\n'); print(s.recv(1024)); s.close()"
+python3 -c "import socket,json; s=socket.socket(socket.AF_UNIX); s.connect('/tmp/claudeer.sock'); s.send(json.dumps({'state':'working','session_id':'test'}).encode()+b'\n'); print(s.recv(1024)); s.close()"
 ```
 
 Test as Claude Code plugin:
@@ -33,13 +33,13 @@ The app acts as its own daemon — no separate server process.
 ```
 Claude Code Hooks (Python) ──(Unix Socket)──> Swift App
     notify.py                                    │
-    SessionStart/Stop/Notification          EventServer (POSIX socket on /tmp/claudeer.sock)
-                                                 │
-                                           EventManager
+    SessionStart / UserPromptSubmit /       EventServer (POSIX socket on /tmp/claudeer.sock)
+    Stop / Notification                          │
+                                           EventManager (tracks currentState; fires only on change)
                                             │    │    │
                               CharacterController │  SoundPlayer
                                     │         SpeechBubbleView
-                              SpriteEngine
+                              SpriteEngine (idle/working sprite swap)
                                     │
                               MascotWindow (transparent NSWindow, click-through)
 
@@ -54,21 +54,21 @@ AssetStore (~/Library/Application Support/Claudeer/)
 
 **Thread model**: EventServer accept loop runs on a background GCD queue. All events are dispatched to main thread via `DispatchQueue.main.async` before touching UI. `serverFD` and `running` are protected by NSLock.
 
-**Hook flow**: Claude Code fires hook → `notify.py` reads stdin JSON, sends event to Unix socket, prints `{"continue": true}`. Fails silently if app isn't running.
+**Hook flow**: Claude Code fires hook → `notify.py` reads stdin JSON, sends `{state, session_id, pid?}` to Unix socket, prints `{"continue": true}`. Fails silently if app isn't running. Hook → state mapping: `SessionStart`→`idle` (with PID for crash detection), `UserPromptSubmit`→`working`, `Stop`/`Notification`→`idle`. EventManager dedupes — sound + bubble only fire when state actually changes.
 
 ## Key Conventions
 
 - **Pure stdlib** on both sides — no external Swift packages, no Python pip dependencies
 - SwiftUI is used for two surfaces: the menu bar popover (`MenuBarController`) and the Preferences window (`PreferencesView`). Everything else (overlay, sprite, speech bubble) is AppKit. Combine appears only via SwiftUI's `ObservableObject` for view refresh — engine notifications use a plain callback (`AssetStore.onAssetsChanged`)
-- Sprite states map directly to filenames: `idle.gif`, `walk.gif`, `alert.gif` (also `.png`/`.jpg`/`.apng`)
-- `EventType` raw values match JSON event names and sound filenames: `session_start`, `need_input`, `session_end`
+- `MascotState` raw values map directly to sprite/sound filenames AND to the `state` field on the wire: `idle.{gif,png,jpg,apng}`, `working.{gif,png,jpg,apng}` (sprites), `idle.{wav,mp3,...}` / `working.{wav,mp3,...}` (sounds)
+- A sound + speech bubble only fire on actual state transitions (idle↔working). Repeated events at the same state are deduped in `EventManager.applyTransition`
 - User assets live in `~/Library/Application Support/Claudeer/{sprites,sounds,config.json}` and are managed by `AssetStore` (the single source of truth for asset paths and config). Nothing is bundled in `Sources/Claudeer/Resources/` — that directory has been removed
 
 ## Plugin Structure
 
 ```
 .claude-plugin/plugin.json     # Plugin manifest — bump version on functional changes
-hooks/hooks.json               # Registers SessionStart, Stop, Notification hooks
+hooks/hooks.json               # Registers SessionStart, UserPromptSubmit, Stop, Notification hooks
 hooks/scripts/notify.py        # Hook script — uses ${CLAUDE_PLUGIN_ROOT} for path resolution
 ```
 
@@ -78,7 +78,7 @@ hooks/scripts/notify.py        # Hook script — uses ${CLAUDE_PLUGIN_ROOT} for 
 - `swift test` requires full Xcode.app installation, not just Command Line Tools
 - Socket path is hardcoded to `/tmp/claudeer.sock` in both `EventServer.swift` and `notify.py` — change both if modifying
 - `MascotWindow.ignoresMouseEvents = true` makes the entire overlay click-through; partial hit-testing would require overriding `NSView.hitTest(_:)`
-- `CharacterController` freezes movement during alert state (`isAlerted` flag) so speech bubbles stay aligned with the character
+- `CharacterController` freezes movement for 3s during a state transition (`isFrozen` flag) so speech bubbles stay aligned with the character
 - `AssetStore` creates the App Support directories on init — first launch is silent, no manual `mkdir` needed
 - APNG has no system-defined `UTType` on macOS, so `.apng` files are not selectable in the Preferences file picker. Users should rename `.apng` → `.png` (PNG-compatible). Documented in README
 - When changing `AssetStore` slot semantics, remember `SpriteEngine.spriteExtensions` and `SoundPlayer` extension lists must match — both are searched in the same order at load time

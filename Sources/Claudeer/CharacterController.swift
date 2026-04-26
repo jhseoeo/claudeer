@@ -8,9 +8,10 @@ class CharacterController {
     private var speed: CGFloat = 2.0
 
     private var isMoving = false
-    private var isAlerted = false
+    private var isFrozen = false
     private var idleTimer: TimeInterval = 0
     private var idleDuration: TimeInterval = 0
+    private var transitionWorkItem: DispatchWorkItem?
 
     init(spriteEngine: SpriteEngine) {
         self.spriteEngine = spriteEngine
@@ -35,7 +36,7 @@ class CharacterController {
     }
 
     private func tick() {
-        if isAlerted { return }
+        if isFrozen { return }
         if isMoving {
             moveTowardTarget()
         } else {
@@ -49,7 +50,6 @@ class CharacterController {
     private func startWalking() {
         isMoving = true
         target = randomPointInArea()
-        spriteEngine.setState(.walk)
     }
 
     private func moveTowardTarget() {
@@ -61,7 +61,6 @@ class CharacterController {
         if dist < speed {
             pos = target
             isMoving = false
-            spriteEngine.setState(.idle)
             pickNewIdleDuration()
         } else {
             pos.x += (dx / dist) * speed
@@ -95,19 +94,16 @@ class CharacterController {
         idleDuration = Double.random(in: 2.0...6.0)
     }
 
-    private var alertWorkItem: DispatchWorkItem?
-
-    func triggerAlert() {
-        alertWorkItem?.cancel()
-        spriteEngine.setState(.alert)
+    func transitionTo(_ state: MascotState) {
+        transitionWorkItem?.cancel()
+        spriteEngine.setState(state)
         isMoving = false
-        isAlerted = true
+        isFrozen = true
         let workItem = DispatchWorkItem { [weak self] in
-            self?.isAlerted = false
-            self?.spriteEngine.setState(.idle)
+            self?.isFrozen = false
             self?.pickNewIdleDuration()
         }
-        alertWorkItem = workItem
+        transitionWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + 3.0, execute: workItem)
     }
 }

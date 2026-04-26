@@ -8,13 +8,13 @@ import sys
 SOCKET_PATH = "/tmp/claudeer.sock"
 
 
-def send_event(event_type, session_id, pid=None):
-    """Send an event to the Speaki app. Fail silently if app isn't running."""
+def send_event(state, session_id, pid=None):
+    """Send an event to the Claudeer app. Fail silently if app isn't running."""
     try:
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
             sock.settimeout(2)
             sock.connect(SOCKET_PATH)
-            payload = {"event": event_type, "session_id": session_id}
+            payload = {"state": state, "session_id": session_id}
             if pid is not None:
                 payload["pid"] = pid
             sock.send(json.dumps(payload).encode() + b"\n")
@@ -29,14 +29,13 @@ def main():
     hook_event = hook_input.get("hook_event_name", "")
 
     if hook_event == "SessionStart":
-        pid = os.getppid()
-        send_event("session_start", session_id, pid)
-
+        send_event("idle", session_id, pid=os.getppid())
+    elif hook_event == "UserPromptSubmit":
+        send_event("working", session_id)
     elif hook_event == "Stop":
-        send_event("session_end", session_id)
-
+        send_event("idle", session_id)
     elif hook_event == "Notification":
-        send_event("need_input", session_id)
+        send_event("idle", session_id)
 
     print(json.dumps({"continue": True}))
 
