@@ -5,7 +5,7 @@ class EventManager {
     private let soundPlayer: SoundPlayer
     private let speechBubble: SpeechBubbleView
     private let spriteEngine: SpriteEngine
-    private let config: SpeakiConfig
+    var config: SpeakiConfig
 
     private var activeSessions: [String: Int] = [:]
     private var pidCheckTimer: Timer?
