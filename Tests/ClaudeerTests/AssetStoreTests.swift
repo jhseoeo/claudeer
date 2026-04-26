@@ -128,4 +128,63 @@ final class AssetStoreTests: XCTestCase {
 
         XCTAssertFalse(FileManager.default.fileExists(atPath: file.path))
     }
+
+    func testInitLoadsDefaultConfigWhenAbsent() {
+        let store = AssetStore(baseDirectory: tempDir)
+        XCTAssertEqual(store.config.defaultArea, SpeakiConfig.default.defaultArea)
+        XCTAssertEqual(store.config.speeches.sessionStart, SpeakiConfig.default.speeches.sessionStart)
+    }
+
+    func testInitLoadsExistingConfig() throws {
+        let custom = SpeakiConfig(
+            defaultArea: "top",
+            speeches: Speeches(sessionStart: "A", needInput: "B", sessionEnd: "C")
+        )
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        let configURL = tempDir.appendingPathComponent("config.json")
+        try custom.save(to: configURL)
+
+        let store = AssetStore(baseDirectory: tempDir)
+        XCTAssertEqual(store.config.defaultArea, "top")
+        XCTAssertEqual(store.config.speeches.sessionStart, "A")
+    }
+
+    func testUpdateSpeechPersistsToDisk() throws {
+        let store = AssetStore(baseDirectory: tempDir)
+        store.updateSpeech(for: .needInput, text: "Custom message")
+
+        let reloaded = SpeakiConfig.load(from: store.configURL)
+        XCTAssertEqual(reloaded.speeches.needInput, "Custom message")
+        XCTAssertEqual(reloaded.speeches.sessionStart, SpeakiConfig.default.speeches.sessionStart)
+    }
+
+    func testOnAssetsChangedFiresAfterRegister() throws {
+        let store = AssetStore(baseDirectory: tempDir)
+        var fired = 0
+        store.onAssetsChanged = { fired += 1 }
+
+        let source = tempDir.appendingPathComponent("s.gif")
+        try Data("d".utf8).write(to: source)
+        try store.registerSprite(source: source, for: .idle)
+
+        XCTAssertEqual(fired, 1)
+    }
+
+    func testOnAssetsChangedFiresAfterClear() {
+        let store = AssetStore(baseDirectory: tempDir)
+        var fired = 0
+        store.onAssetsChanged = { fired += 1 }
+
+        store.clearSprite(for: .idle)
+        XCTAssertEqual(fired, 1)
+    }
+
+    func testOnAssetsChangedFiresAfterUpdateSpeech() {
+        let store = AssetStore(baseDirectory: tempDir)
+        var fired = 0
+        store.onAssetsChanged = { fired += 1 }
+
+        store.updateSpeech(for: .sessionStart, text: "Hi")
+        XCTAssertEqual(fired, 1)
+    }
 }
