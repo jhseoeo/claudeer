@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -26,7 +27,7 @@ struct PreferencesView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Sprites").font(.headline)
             ForEach(MascotState.allCases, id: \.self) { state in
-                AssetSlotRow(
+                SpriteSlotRow(
                     label: state.displayName,
                     currentURL: assetStore.currentSpriteURL(for: state),
                     onChoose: { chooseSprite(for: state) },
@@ -53,6 +54,7 @@ struct PreferencesView: View {
             }
         }
     }
+
 
     private var speechesSection: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -102,7 +104,7 @@ struct PreferencesView: View {
                 .font(.subheadline)
                 .foregroundColor(.secondary)
             ForEach(InteractionSprite.allCases, id: \.self) { key in
-                AssetSlotRow(
+                SpriteSlotRow(
                     label: key.displayName,
                     currentURL: assetStore.currentInteractionSpriteURL(for: key),
                     onChoose: { chooseInteractionSprite(for: key) },
@@ -115,11 +117,13 @@ struct PreferencesView: View {
                 .foregroundColor(.secondary)
                 .padding(.top, 4)
             ForEach(InteractionSound.allCases, id: \.self) { key in
-                AssetSlotRow(
+                SoundSlotRow(
                     label: key.displayName,
                     currentURL: assetStore.currentInteractionSoundURL(for: key),
+                    loop: nil,
                     onChoose: { chooseInteractionSound(for: key) },
-                    onClear: { assetStore.clearInteractionSound(for: key) }
+                    onClear: { assetStore.clearInteractionSound(for: key) },
+                    onLoopChange: nil
                 )
                 .id(assetStore.changeVersion)
             }
@@ -177,16 +181,19 @@ struct PreferencesView: View {
     }
 }
 
-private struct AssetSlotRow: View {
+private struct SpriteSlotRow: View {
     let label: String
     let currentURL: URL?
     let onChoose: () -> Void
     let onClear: () -> Void
+    @State private var thumbnail: NSImage?
 
     var body: some View {
         HStack {
             Text(label)
                 .frame(width: 80, alignment: .leading)
+            thumbnailView
+                .frame(width: 32, height: 32)
             Text(currentURL?.lastPathComponent ?? "Not registered")
                 .foregroundColor(currentURL == nil ? .secondary : .primary)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -195,32 +202,68 @@ private struct AssetSlotRow: View {
                 Button("Clear", action: onClear)
             }
         }
+        .onAppear { loadThumbnail() }
+    }
+
+    @ViewBuilder
+    private var thumbnailView: some View {
+        if let img = thumbnail {
+            Image(nsImage: img)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .cornerRadius(3)
+        } else {
+            RoundedRectangle(cornerRadius: 3)
+                .fill(Color.secondary.opacity(0.12))
+        }
+    }
+
+    private func loadThumbnail() {
+        thumbnail = currentURL.flatMap { NSImage(contentsOf: $0) }
     }
 }
 
 private struct SoundSlotRow: View {
     let label: String
     let currentURL: URL?
-    let loop: Bool
+    let loop: Bool?
     let onChoose: () -> Void
     let onClear: () -> Void
-    let onLoopChange: (Bool) -> Void
+    let onLoopChange: ((Bool) -> Void)?
+    @State private var previewSound: NSSound?
 
     var body: some View {
         HStack {
             Text(label)
                 .frame(width: 80, alignment: .leading)
+            Button(action: playPreview) {
+                Image(systemName: "play.circle")
+                    .font(.title3)
+            }
+            .buttonStyle(.plain)
+            .disabled(currentURL == nil)
+            .help(currentURL == nil ? "" : "Preview")
             Text(currentURL?.lastPathComponent ?? "Not registered")
                 .foregroundColor(currentURL == nil ? .secondary : .primary)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Toggle("Loop", isOn: Binding(get: { loop }, set: onLoopChange))
-                .toggleStyle(.checkbox)
-                .disabled(currentURL == nil)
+            if let loop = loop, let onLoopChange = onLoopChange {
+                Toggle("Loop", isOn: Binding(get: { loop }, set: onLoopChange))
+                    .toggleStyle(.checkbox)
+                    .disabled(currentURL == nil)
+            }
             Button("Choose...", action: onChoose)
             if currentURL != nil {
                 Button("Clear", action: onClear)
             }
         }
+    }
+
+    private func playPreview() {
+        guard let url = currentURL else { return }
+        previewSound?.stop()
+        let sound = NSSound(contentsOf: url, byReference: false)
+        previewSound = sound
+        sound?.play()
     }
 }
 
