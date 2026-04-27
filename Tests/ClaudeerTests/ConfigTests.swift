@@ -18,7 +18,11 @@ final class ConfigTests: XCTestCase {
             "idle": false,
             "working": true
           },
-          "speed": 3.5
+          "speed": 3.5,
+          "flips": {
+            "directional": true,
+            "mirrored": true
+          }
         }
         """.data(using: .utf8)!
 
@@ -31,6 +35,8 @@ final class ConfigTests: XCTestCase {
         XCTAssertFalse(config.movements.idle)
         XCTAssertTrue(config.movements.working)
         XCTAssertEqual(config.speed, 3.5)
+        XCTAssertTrue(config.flips.directional)
+        XCTAssertTrue(config.flips.mirrored)
     }
 
     func testParseConfigWithoutLoopsDefaultsOff() throws {
@@ -71,6 +77,19 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(config.speed, SpeakiConfig.defaultSpeed)
     }
 
+    func testParseConfigWithoutFlipsDefaultsOff() throws {
+        let json = """
+        {
+          "default_area": "bottom",
+          "speeches": { "idle": "a", "working": "b" }
+        }
+        """.data(using: .utf8)!
+
+        let config = try JSONDecoder().decode(SpeakiConfig.self, from: json)
+        XCTAssertFalse(config.flips.directional)
+        XCTAssertFalse(config.flips.mirrored)
+    }
+
     func testDefaultConfig() {
         let config = SpeakiConfig.default
         XCTAssertEqual(config.defaultArea, "bottom")
@@ -81,6 +100,8 @@ final class ConfigTests: XCTestCase {
         XCTAssertTrue(config.movements.idle)
         XCTAssertTrue(config.movements.working)
         XCTAssertEqual(config.speed, SpeakiConfig.defaultSpeed)
+        XCTAssertFalse(config.flips.directional)
+        XCTAssertFalse(config.flips.mirrored)
     }
 
     func testSaveAndReload() throws {
@@ -89,7 +110,8 @@ final class ConfigTests: XCTestCase {
             speeches: Speeches(idle: "Halp", working: "Yo"),
             loops: LoopSettings(idle: true, working: false),
             movements: MovementSettings(idle: false, working: true),
-            speed: 4.0
+            speed: 4.0,
+            flips: FlipSettings(directional: true, mirrored: false)
         )
         let tmpURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("claudeer-test-\(UUID().uuidString).json")
@@ -106,5 +128,7 @@ final class ConfigTests: XCTestCase {
         XCTAssertFalse(reloaded.movements.idle)
         XCTAssertTrue(reloaded.movements.working)
         XCTAssertEqual(reloaded.speed, 4.0)
+        XCTAssertTrue(reloaded.flips.directional)
+        XCTAssertFalse(reloaded.flips.mirrored)
     }
 }

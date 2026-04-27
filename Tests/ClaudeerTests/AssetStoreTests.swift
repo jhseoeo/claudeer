@@ -141,7 +141,8 @@ final class AssetStoreTests: XCTestCase {
             speeches: Speeches(idle: "A", working: "B"),
             loops: LoopSettings(idle: true, working: false),
             movements: MovementSettings(idle: false, working: true),
-            speed: 4.0
+            speed: 4.0,
+            flips: .off
         )
         try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
         let configURL = tempDir.appendingPathComponent("config.json")
@@ -200,6 +201,38 @@ final class AssetStoreTests: XCTestCase {
         XCTAssertEqual(reloaded.speed, 3.0)
         XCTAssertTrue(reloaded.loops.working)
         XCTAssertFalse(reloaded.movements.idle)
+    }
+
+    func testUpdateFlipDirectionalPersistsAndPreservesMirror() throws {
+        let store = AssetStore(baseDirectory: tempDir)
+        store.updateFlipMirrored(true)
+        store.updateFlipDirectional(true)
+
+        let reloaded = SpeakiConfig.load(from: store.configURL)
+        XCTAssertTrue(reloaded.flips.directional)
+        XCTAssertTrue(reloaded.flips.mirrored)
+    }
+
+    func testUpdateFlipMirroredPersistsAndPreservesDirectional() throws {
+        let store = AssetStore(baseDirectory: tempDir)
+        store.updateFlipDirectional(true)
+        store.updateFlipMirrored(true)
+
+        let reloaded = SpeakiConfig.load(from: store.configURL)
+        XCTAssertTrue(reloaded.flips.directional)
+        XCTAssertTrue(reloaded.flips.mirrored)
+    }
+
+    func testUpdateFlipPreservesOtherSettings() throws {
+        let store = AssetStore(baseDirectory: tempDir)
+        store.updateSpeech(for: .idle, text: "Hello")
+        store.updateLoop(for: .working, to: true)
+        store.updateFlipDirectional(true)
+
+        let reloaded = SpeakiConfig.load(from: store.configURL)
+        XCTAssertEqual(reloaded.speeches.idle, "Hello")
+        XCTAssertTrue(reloaded.loops.working)
+        XCTAssertTrue(reloaded.flips.directional)
     }
 
     func testUpdateSpeechPersistsToDisk() throws {
