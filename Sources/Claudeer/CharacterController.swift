@@ -96,6 +96,10 @@ class CharacterController {
             isMoving = false
             pickNewIdleDuration()
         } else {
+            if abs(dx) > 0.01 {
+                let left = dx < 0
+                spriteEngine.setFacing(left: left)
+            }
             pos.x += (dx / dist) * speed
             pos.y += (dy / dist) * speed
         }

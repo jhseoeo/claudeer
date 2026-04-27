@@ -16,6 +16,8 @@ struct PreferencesView: View {
                 Divider()
                 movementSection
                 Divider()
+                flipSection
+                Divider()
                 interactionsSection
             }
             .padding(20)
@@ -94,6 +96,22 @@ struct PreferencesView: View {
                     label: { EmptyView() }
                 )
             }
+        }
+    }
+
+    private var flipSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Flip").font(.headline)
+            Toggle("Face movement direction", isOn: Binding(
+                get: { assetStore.config.flips.directional },
+                set: { assetStore.updateFlipDirectional($0) }
+            ))
+            .toggleStyle(.checkbox)
+            Toggle("Mirror sprite by default", isOn: Binding(
+                get: { assetStore.config.flips.mirrored },
+                set: { assetStore.updateFlipMirrored($0) }
+            ))
+            .toggleStyle(.checkbox)
         }
     }
 

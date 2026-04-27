@@ -33,12 +33,20 @@ struct MovementSettings: Codable {
     static let allOn = MovementSettings(idle: true, working: true)
 }
 
+struct FlipSettings: Codable {
+    let directional: Bool
+    let mirrored: Bool
+
+    static let off = FlipSettings(directional: false, mirrored: false)
+}
+
 struct SpeakiConfig: Codable {
     let defaultArea: String
     let speeches: Speeches
     let loops: LoopSettings
     let movements: MovementSettings
     let speed: Double
+    let flips: FlipSettings
 
     static let defaultSpeed: Double = 2.0
     static let speedRange: ClosedRange<Double> = 0.5...6.0
@@ -49,14 +57,16 @@ struct SpeakiConfig: Codable {
         case loops
         case movements
         case speed
+        case flips
     }
 
-    init(defaultArea: String, speeches: Speeches, loops: LoopSettings, movements: MovementSettings, speed: Double) {
+    init(defaultArea: String, speeches: Speeches, loops: LoopSettings, movements: MovementSettings, speed: Double, flips: FlipSettings) {
         self.defaultArea = defaultArea
         self.speeches = speeches
         self.loops = loops
         self.movements = movements
         self.speed = speed
+        self.flips = flips
     }
 
     init(from decoder: Decoder) throws {
@@ -66,6 +76,7 @@ struct SpeakiConfig: Codable {
         self.loops = try container.decodeIfPresent(LoopSettings.self, forKey: .loops) ?? .off
         self.movements = try container.decodeIfPresent(MovementSettings.self, forKey: .movements) ?? .allOn
         self.speed = try container.decodeIfPresent(Double.self, forKey: .speed) ?? Self.defaultSpeed
+        self.flips = try container.decodeIfPresent(FlipSettings.self, forKey: .flips) ?? .off
     }
 
     static let `default` = SpeakiConfig(
@@ -76,7 +87,8 @@ struct SpeakiConfig: Codable {
         ),
         loops: .off,
         movements: .allOn,
-        speed: defaultSpeed
+        speed: defaultSpeed,
+        flips: .off
     )
 
     static func load(from url: URL) -> SpeakiConfig {

@@ -36,6 +36,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         mascotWindow?.contentView = contentView
 
         spriteEngine?.loadSprites(from: store.spritesDirectory)
+        spriteEngine?.setFlips(store.config.flips)
         soundPlayer = SoundPlayer()
         soundPlayer?.loadSounds(from: store.soundsDirectory)
 
@@ -62,6 +63,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         store.onAssetsChanged = { [weak self] in
             guard let self = self, let store = self.assetStore else { return }
             self.spriteEngine?.loadSprites(from: store.spritesDirectory)
+            self.spriteEngine?.setFlips(store.config.flips)
             self.soundPlayer?.loadSounds(from: store.soundsDirectory)
             self.eventManager?.config = store.config
             self.eventManager?.syncLoop()

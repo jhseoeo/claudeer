@@ -127,18 +127,28 @@ class AssetStore: ObservableObject {
         setConfig(speed: value)
     }
 
+    func updateFlipDirectional(_ value: Bool) {
+        setConfig(flips: FlipSettings(directional: value, mirrored: config.flips.mirrored))
+    }
+
+    func updateFlipMirrored(_ value: Bool) {
+        setConfig(flips: FlipSettings(directional: config.flips.directional, mirrored: value))
+    }
+
     private func setConfig(
         speeches: Speeches? = nil,
         loops: LoopSettings? = nil,
         movements: MovementSettings? = nil,
-        speed: Double? = nil
+        speed: Double? = nil,
+        flips: FlipSettings? = nil
     ) {
         config = SpeakiConfig(
             defaultArea: config.defaultArea,
             speeches: speeches ?? config.speeches,
             loops: loops ?? config.loops,
             movements: movements ?? config.movements,
-            speed: speed ?? config.speed
+            speed: speed ?? config.speed,
+            flips: flips ?? config.flips
         )
         try? config.save(to: configURL)
         notify()
