@@ -1,66 +1,42 @@
 import AppKit
 
 class EventManager {
-    private let characterController: CharacterController
+    private let mascotManager: MascotManager
     private let soundPlayer: SoundPlayer
-    private let speechBubble: SpeechBubbleView
-    private let spriteEngine: SpriteEngine
     let sessionTracker: SessionTracker
     var config: SpeakiConfig
 
-    private var currentState: MascotState = .idle
+    private var globalState: MascotState = .idle
     private var pidCheckTimer: Timer?
 
     init(
-        characterController: CharacterController,
+        mascotManager: MascotManager,
         soundPlayer: SoundPlayer,
-        speechBubble: SpeechBubbleView,
-        spriteEngine: SpriteEngine,
         sessionTracker: SessionTracker,
         config: SpeakiConfig
     ) {
-        self.characterController = characterController
+        self.mascotManager = mascotManager
         self.soundPlayer = soundPlayer
-        self.speechBubble = speechBubble
-        self.spriteEngine = spriteEngine
         self.sessionTracker = sessionTracker
         self.config = config
     }
 
     func handleEvent(_ event: SpeakiEvent) {
         sessionTracker.record(event)
-        applyTransition(to: event.state)
+        let mascot = mascotManager.ensureMascot(sessionID: event.sessionId)
+        mascot.applyTransition(to: event.state, speech: speech(for: event.state))
+        updateGlobalState()
     }
 
-    /// Re-evaluate loop playback for the current state. Call after app start
-    /// and after config/asset hot reload, so toggling Loop or swapping a sound
-    /// file takes effect without waiting for a state transition.
+    /// Re-evaluate loop playback for the current global state. Call after app
+    /// start and after config/asset hot reload, so toggling Loop or swapping
+    /// a sound file takes effect without waiting for a state transition.
     func syncLoop() {
-        if config.loops.value(for: currentState) {
-            soundPlayer.play(for: currentState, loop: true)
+        if config.loops.value(for: globalState) {
+            soundPlayer.play(for: globalState, loop: true)
         } else {
             soundPlayer.stopLoop()
         }
-    }
-
-    private func applyTransition(to newState: MascotState) {
-        guard newState != currentState else { return }
-        currentState = newState
-        characterController.transitionTo(newState)
-        soundPlayer.play(for: newState, loop: config.loops.value(for: newState))
-
-        let speech: String
-        switch newState {
-        case .idle: speech = config.speeches.idle
-        case .working: speech = config.speeches.working
-        }
-
-        let spritePos = spriteEngine.position
-        let aboveSprite = NSPoint(
-            x: spritePos.x + spriteEngine.size.width / 2,
-            y: spritePos.y + spriteEngine.size.height
-        )
-        speechBubble.show(text: speech, above: aboveSprite)
     }
 
     func startPIDMonitoring() {
@@ -76,8 +52,25 @@ class EventManager {
 
     private func checkActiveSessions() {
         let pruned = sessionTracker.pruneDeadProcesses()
-        if !pruned.isEmpty && currentState == .working && !sessionTracker.anyWorking {
-            applyTransition(to: .idle)
+        for session in pruned {
+            mascotManager.removeMascot(sessionID: session.id)
         }
+        if !pruned.isEmpty {
+            updateGlobalState()
+        }
+    }
+
+    private func speech(for state: MascotState) -> String {
+        switch state {
+        case .idle: return config.speeches.idle
+        case .working: return config.speeches.working
+        }
+    }
+
+    private func updateGlobalState() {
+        let newState: MascotState = sessionTracker.anyWorking ? .working : .idle
+        guard newState != globalState else { return }
+        globalState = newState
+        soundPlayer.play(for: newState, loop: config.loops.value(for: newState))
     }
 }

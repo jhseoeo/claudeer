@@ -3,12 +3,10 @@ import Combine
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     var mascotWindow: MascotWindow?
-    var spriteEngine: SpriteEngine?
-    var characterController: CharacterController?
+    var mascotManager: MascotManager?
     var eventServer: EventServer?
     var eventManager: EventManager?
     var soundPlayer: SoundPlayer?
-    var speechBubble: SpeechBubbleView?
     var menuBarController: MenuBarController?
     var assetStore: AssetStore?
     var interactionController: InteractionController?
@@ -24,37 +22,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let contentView = InteractionView(frame: mascotWindow!.frame)
         contentView.wantsLayer = true
-
-        let spriteSize = NSRect(x: 100, y: 100, width: 64, height: 64)
-        spriteEngine = SpriteEngine(frame: spriteSize)
-        contentView.addSubview(spriteEngine!.view)
-
-        speechBubble = SpeechBubbleView()
-        speechBubble?.isHidden = true
-        contentView.addSubview(speechBubble!)
-
         mascotWindow?.contentView = contentView
 
-        spriteEngine?.loadSprites(from: store.spritesDirectory)
-        spriteEngine?.setFlips(store.config.flips)
         soundPlayer = SoundPlayer()
         soundPlayer?.loadSounds(from: store.soundsDirectory)
 
-        characterController = CharacterController(spriteEngine: spriteEngine!)
+        let manager = MascotManager(containerView: contentView, assetStore: store)
+        mascotManager = manager
         if let screen = NSScreen.main {
             let preset = AreaPreset(rawValue: store.config.defaultArea) ?? .bottom
-            characterController?.setArea(preset, screenSize: screen.frame.size)
+            manager.setArea(preset, screenSize: screen.frame.size)
         }
-        characterController?.setMovement(store.config.movements)
-        characterController?.setSpeed(CGFloat(store.config.speed))
-        characterController?.start()
 
+        let sessionTracker = SessionTracker()
         eventManager = EventManager(
-            characterController: characterController!,
+            mascotManager: manager,
             soundPlayer: soundPlayer!,
-            speechBubble: speechBubble!,
-            spriteEngine: spriteEngine!,
-            sessionTracker: SessionTracker(),
+            sessionTracker: sessionTracker,
             config: store.config
         )
         eventManager?.startPIDMonitoring()
@@ -62,21 +46,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         store.onAssetsChanged = { [weak self] in
             guard let self = self, let store = self.assetStore else { return }
-            self.spriteEngine?.loadSprites(from: store.spritesDirectory)
-            self.spriteEngine?.setFlips(store.config.flips)
+            self.mascotManager?.reloadAssets()
             self.soundPlayer?.loadSounds(from: store.soundsDirectory)
             self.eventManager?.config = store.config
             self.eventManager?.syncLoop()
-            self.characterController?.setMovement(store.config.movements)
-            self.characterController?.setSpeed(CGFloat(store.config.speed))
         }
 
         interactionController = InteractionController(
             window: mascotWindow!,
             interactionView: contentView,
-            spriteEngine: spriteEngine!,
-            soundPlayer: soundPlayer!,
-            characterController: characterController!
+            mascotManager: manager,
+            soundPlayer: soundPlayer!
         )
         interactionController?.start()
 
@@ -88,11 +68,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         menuBarController = MenuBarController()
         menuBarController?.assetStore = store
-        menuBarController?.sessionTracker = eventManager?.sessionTracker
+        menuBarController?.sessionTracker = sessionTracker
         menuBarController?.currentPreset = AreaPreset(rawValue: store.config.defaultArea) ?? .bottom
         menuBarController?.onAreaChanged = { [weak self] preset in
             if let screen = NSScreen.main {
-                self?.characterController?.setArea(preset, screenSize: screen.frame.size)
+                self?.mascotManager?.setArea(preset, screenSize: screen.frame.size)
             }
         }
         menuBarController?.onVolumeChanged = { [weak self] volume in
@@ -100,7 +80,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         menuBarController?.setup()
 
-        eventManager?.sessionTracker.$sessions
+        sessionTracker.$sessions
             .sink { [weak self] sessions in
                 guard let window = self?.mascotWindow else { return }
                 if sessions.isEmpty {
@@ -115,7 +95,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        characterController?.stop()
+        mascotManager?.teardownAll()
         eventServer?.stop()
         eventManager?.stopPIDMonitoring()
         interactionController?.stop()
