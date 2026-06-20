@@ -4,8 +4,7 @@ class MascotManager {
     private var mascots: [String: Mascot] = [:]
     private let containerView: NSView
     private let assetStore: AssetStore
-    private var areaPreset: AreaPreset = .bottom
-    private var screenSize: CGSize = .zero
+    private var areas: [CGRect] = []
 
     static let spriteSize = NSSize(width: 64, height: 64)
 
@@ -14,11 +13,10 @@ class MascotManager {
         self.assetStore = assetStore
     }
 
-    func setArea(_ preset: AreaPreset, screenSize: CGSize) {
-        self.areaPreset = preset
-        self.screenSize = screenSize
+    func setAreas(_ rects: [CGRect]) {
+        self.areas = rects
         for mascot in mascots.values {
-            mascot.characterController.setArea(preset, screenSize: screenSize)
+            mascot.characterController.setAreas(rects)
         }
     }
 
@@ -33,7 +31,7 @@ class MascotManager {
         )
         mascot.spriteEngine.loadSprites(from: assetStore.spritesDirectory)
         mascot.spriteEngine.setFlips(assetStore.config.flips)
-        mascot.characterController.setArea(areaPreset, screenSize: screenSize)
+        mascot.characterController.setAreas(areas)
         mascot.characterController.setMovement(assetStore.config.movements)
         mascot.characterController.setSpeed(CGFloat(assetStore.config.speed))
         mascot.start()
@@ -71,14 +69,18 @@ class MascotManager {
     }
 
     private func randomInitialPosition() -> NSPoint {
-        let rect = areaPreset.rect(for: screenSize)
-        let minX = rect.minX
-        let maxX = rect.maxX - Self.spriteSize.width
-        let minY = rect.minY
-        let maxY = rect.maxY - Self.spriteSize.height
+        let spriteSize = Self.spriteSize
+        let usable = areas.compactMap { rect -> CGRect? in
+            let w = rect.width - spriteSize.width
+            let h = rect.height - spriteSize.height
+            return w >= 0 && h >= 0
+                ? CGRect(x: rect.minX, y: rect.minY, width: w, height: h)
+                : nil
+        }
+        guard let rect = usable.randomElement() else { return .zero }
         return NSPoint(
-            x: CGFloat.random(in: minX...max(minX, maxX)),
-            y: CGFloat.random(in: minY...max(minY, maxY))
+            x: CGFloat.random(in: rect.minX...max(rect.minX, rect.maxX)),
+            y: CGFloat.random(in: rect.minY...max(rect.minY, rect.maxY))
         )
     }
 }

@@ -11,6 +11,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var assetStore: AssetStore?
     var interactionController: InteractionController?
     private var cancellables = Set<AnyCancellable>()
+    private var currentPreset: AreaPreset = .bottom
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -20,7 +21,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         mascotWindow = MascotWindow()
 
-        let contentView = InteractionView(frame: mascotWindow!.frame)
+        let contentView = InteractionView(frame: NSRect(origin: .zero, size: mascotWindow!.frame.size))
         contentView.wantsLayer = true
         mascotWindow?.contentView = contentView
 
@@ -29,10 +30,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let manager = MascotManager(containerView: contentView, assetStore: store)
         mascotManager = manager
-        if let screen = NSScreen.main {
-            let preset = AreaPreset(rawValue: store.config.defaultArea) ?? .bottom
-            manager.setArea(preset, screenSize: screen.frame.size)
-        }
+        currentPreset = AreaPreset(rawValue: store.config.defaultArea) ?? .bottom
+        refreshAreas()
 
         let sessionTracker = SessionTracker()
         eventManager = EventManager(
@@ -50,6 +49,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self.soundPlayer?.loadSounds(from: store.soundsDirectory)
             self.eventManager?.config = store.config
             self.eventManager?.syncLoop()
+            self.refreshAreas()
         }
 
         interactionController = InteractionController(
@@ -69,11 +69,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menuBarController = MenuBarController()
         menuBarController?.assetStore = store
         menuBarController?.sessionTracker = sessionTracker
-        menuBarController?.currentPreset = AreaPreset(rawValue: store.config.defaultArea) ?? .bottom
+        menuBarController?.currentPreset = currentPreset
         menuBarController?.onAreaChanged = { [weak self] preset in
-            if let screen = NSScreen.main {
-                self?.mascotManager?.setArea(preset, screenSize: screen.frame.size)
-            }
+            self?.currentPreset = preset
+            self?.refreshAreas()
         }
         menuBarController?.onVolumeChanged = { [weak self] volume in
             self?.soundPlayer?.volume = volume
@@ -91,6 +90,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             .store(in: &cancellables)
 
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(screensDidChange),
+            name: NSApplication.didChangeScreenParametersNotification,
+            object: nil
+        )
+
         print("Claudeer started")
     }
 
@@ -99,6 +105,27 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         eventServer?.stop()
         eventManager?.stopPIDMonitoring()
         interactionController?.stop()
+    }
+
+    @objc private func screensDidChange() {
+        mascotWindow?.refreshFrameToAllScreens()
+        refreshAreas()
+    }
+
+    private func refreshAreas() {
+        guard let store = assetStore, let window = mascotWindow else { return }
+        let active = NSScreen.screens(matching: store.config.targetScreenID)
+        let globalRects = currentPreset.rects(for: active)
+        let origin = window.frame.origin
+        let localRects = globalRects.map { rect in
+            CGRect(
+                x: rect.minX - origin.x,
+                y: rect.minY - origin.y,
+                width: rect.width,
+                height: rect.height
+            )
+        }
+        mascotManager?.setAreas(localRects)
     }
 }
 

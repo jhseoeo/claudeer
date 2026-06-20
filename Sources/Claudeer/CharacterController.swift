@@ -3,7 +3,7 @@ import AppKit
 class CharacterController {
     private let spriteEngine: SpriteEngine
     private var movementTimer: Timer?
-    private var currentArea: CGRect = .zero
+    private var currentAreas: [CGRect] = []
     private var target: NSPoint = .zero
     private var speed: CGFloat = 2.0
     private var movements: MovementSettings = .allOn
@@ -20,9 +20,9 @@ class CharacterController {
         self.spriteEngine = spriteEngine
     }
 
-    func setArea(_ preset: AreaPreset, screenSize: CGSize) {
-        currentArea = preset.rect(for: screenSize)
-        let pos = clampToArea(spriteEngine.position)
+    func setAreas(_ rects: [CGRect]) {
+        currentAreas = rects.filter { !$0.isEmpty }
+        let pos = clampToAreas(spriteEngine.position)
         spriteEngine.setPosition(pos)
     }
 
@@ -81,8 +81,9 @@ class CharacterController {
     }
 
     private func startWalking() {
+        guard let next = randomPointInAreas() else { return }
         isMoving = true
-        target = randomPointInArea()
+        target = next
     }
 
     private func moveTowardTarget() {
@@ -106,24 +107,58 @@ class CharacterController {
         spriteEngine.setPosition(pos)
     }
 
-    private func randomPointInArea() -> NSPoint {
+    private func randomPointInAreas() -> NSPoint? {
         let spriteSize = spriteEngine.size
-        let minX = currentArea.minX
-        let maxX = currentArea.maxX - spriteSize.width
-        let minY = currentArea.minY
-        let maxY = currentArea.maxY - spriteSize.height
+        let usable = currentAreas.compactMap { rect -> CGRect? in
+            let r = CGRect(
+                x: rect.minX,
+                y: rect.minY,
+                width: max(0, rect.width - spriteSize.width),
+                height: max(0, rect.height - spriteSize.height)
+            )
+            return r.width >= 0 && r.height >= 0 ? r : nil
+        }
+        guard !usable.isEmpty else { return nil }
+        let weights = usable.map { max(1, $0.width * $0.height) }
+        let total = weights.reduce(0, +)
+        var pick = CGFloat.random(in: 0...total)
+        var index = 0
+        for (i, w) in weights.enumerated() {
+            pick -= w
+            if pick <= 0 { index = i; break }
+            index = i
+        }
+        let rect = usable[index]
         return NSPoint(
-            x: CGFloat.random(in: minX...max(minX, maxX)),
-            y: CGFloat.random(in: minY...max(minY, maxY))
+            x: CGFloat.random(in: rect.minX...max(rect.minX, rect.maxX)),
+            y: CGFloat.random(in: rect.minY...max(rect.minY, rect.maxY))
         )
     }
 
-    private func clampToArea(_ point: NSPoint) -> NSPoint {
+    private func clampToAreas(_ point: NSPoint) -> NSPoint {
         let spriteSize = spriteEngine.size
-        return NSPoint(
-            x: min(max(point.x, currentArea.minX), currentArea.maxX - spriteSize.width),
-            y: min(max(point.y, currentArea.minY), currentArea.maxY - spriteSize.height)
-        )
+        guard !currentAreas.isEmpty else { return point }
+        if currentAreas.contains(where: { $0.contains(point) }) {
+            return point
+        }
+        var bestPoint = point
+        var bestDistance = CGFloat.greatestFiniteMagnitude
+        for rect in currentAreas {
+            let maxX = max(rect.minX, rect.maxX - spriteSize.width)
+            let maxY = max(rect.minY, rect.maxY - spriteSize.height)
+            let clamped = NSPoint(
+                x: min(max(point.x, rect.minX), maxX),
+                y: min(max(point.y, rect.minY), maxY)
+            )
+            let dx = clamped.x - point.x
+            let dy = clamped.y - point.y
+            let dist = dx * dx + dy * dy
+            if dist < bestDistance {
+                bestDistance = dist
+                bestPoint = clamped
+            }
+        }
+        return bestPoint
     }
 
     private func pickNewIdleDuration() {

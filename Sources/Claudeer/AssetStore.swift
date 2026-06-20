@@ -135,12 +135,17 @@ class AssetStore: ObservableObject {
         setConfig(flips: FlipSettings(directional: config.flips.directional, mirrored: value))
     }
 
+    func updateTargetScreen(_ identifier: String?) {
+        setConfig(targetScreenID: .some(identifier))
+    }
+
     private func setConfig(
         speeches: Speeches? = nil,
         loops: LoopSettings? = nil,
         movements: MovementSettings? = nil,
         speed: Double? = nil,
-        flips: FlipSettings? = nil
+        flips: FlipSettings? = nil,
+        targetScreenID: String??  = nil
     ) {
         config = SpeakiConfig(
             defaultArea: config.defaultArea,
@@ -148,7 +153,8 @@ class AssetStore: ObservableObject {
             loops: loops ?? config.loops,
             movements: movements ?? config.movements,
             speed: speed ?? config.speed,
-            flips: flips ?? config.flips
+            flips: flips ?? config.flips,
+            targetScreenID: targetScreenID ?? config.targetScreenID
         )
         try? config.save(to: configURL)
         notify()

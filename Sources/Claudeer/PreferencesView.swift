@@ -16,6 +16,8 @@ struct PreferencesView: View {
                 Divider()
                 movementSection
                 Divider()
+                screenSection
+                Divider()
                 flipSection
                 Divider()
                 interactionsSection
@@ -97,6 +99,10 @@ struct PreferencesView: View {
                 )
             }
         }
+    }
+
+    private var screenSection: some View {
+        ScreenPickerSection(assetStore: assetStore)
     }
 
     private var flipSection: some View {
@@ -196,6 +202,54 @@ struct PreferencesView: View {
         alert.informativeText = error.localizedDescription
         alert.alertStyle = .warning
         alert.runModal()
+    }
+}
+
+private struct ScreenPickerSection: View {
+    @ObservedObject var assetStore: AssetStore
+    @State private var availableScreens: [NSScreen] = NSScreen.screens
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Screen").font(.headline)
+            HStack {
+                Text("Display on")
+                    .frame(width: 80, alignment: .leading)
+                Picker("", selection: selection) {
+                    Text("All Screens").tag(String?.none)
+                    ForEach(availableScreens, id: \.displayID) { screen in
+                        Text(label(for: screen))
+                            .tag(screen.stableIdentifier as String?)
+                    }
+                    if let savedID = assetStore.config.targetScreenID,
+                       !availableScreens.contains(where: { $0.stableIdentifier == savedID }) {
+                        Text("Saved display (disconnected)")
+                            .tag(savedID as String?)
+                    }
+                }
+                .labelsHidden()
+            }
+            Text("Choose “All Screens” to let the mascot roam everywhere, or pin it to a single display.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)) { _ in
+            availableScreens = NSScreen.screens
+        }
+    }
+
+    private var selection: Binding<String?> {
+        Binding(
+            get: { assetStore.config.targetScreenID },
+            set: { assetStore.updateTargetScreen($0) }
+        )
+    }
+
+    private func label(for screen: NSScreen) -> String {
+        let name = screen.localizedName
+        let w = Int(screen.frame.width)
+        let h = Int(screen.frame.height)
+        return "\(name) (\(w)×\(h))"
     }
 }
 
