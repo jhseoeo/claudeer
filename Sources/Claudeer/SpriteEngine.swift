@@ -11,8 +11,13 @@ class SpriteEngine {
     private var flips: FlipSettings = .off
     private var isFacingLeft: Bool = false
 
+    /// Routes the sprite view into the overlay window covering its current position.
+    weak var placer: MascotPlacer?
+    private var globalPosition: NSPoint
+
     init(frame: NSRect) {
         spriteView = SpriteLayerView(frame: frame)
+        globalPosition = frame.origin
     }
 
     var view: NSView { spriteView }
@@ -69,12 +74,33 @@ class SpriteEngine {
         updateDisplayedImage()
     }
 
+    /// Sets the sprite's position in global screen coordinates, reparenting the view
+    /// into whichever overlay window covers that point.
     func setPosition(_ point: NSPoint) {
-        spriteView.setFrameOrigin(point)
+        globalPosition = point
+        placeView()
     }
 
     var position: NSPoint {
-        spriteView.frame.origin
+        globalPosition
+    }
+
+    private func placeView() {
+        let center = NSPoint(
+            x: globalPosition.x + size.width / 2,
+            y: globalPosition.y + size.height / 2
+        )
+        guard let host = placer?.hostView(forGlobalPoint: center) else {
+            spriteView.setFrameOrigin(globalPosition)
+            return
+        }
+        if spriteView.superview !== host.view {
+            host.view.addSubview(spriteView)
+        }
+        spriteView.setFrameOrigin(NSPoint(
+            x: globalPosition.x - host.globalOrigin.x,
+            y: globalPosition.y - host.globalOrigin.y
+        ))
     }
 
     func setFlips(_ settings: FlipSettings) {

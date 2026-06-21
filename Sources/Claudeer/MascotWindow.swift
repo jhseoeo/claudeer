@@ -1,10 +1,16 @@
 import AppKit
 
+/// A transparent, click-through overlay window covering exactly one screen.
+/// Multiple displays are handled by one MascotWindow per NSScreen
+/// (a single window cannot span displays when "Displays have separate Spaces"
+/// is enabled, which is the macOS default), coordinated by OverlayWindowController.
 class MascotWindow: NSWindow {
-    init() {
-        let initialFrame = MascotWindow.unionFrame() ?? NSRect(x: 0, y: 0, width: 800, height: 600)
+    let displayID: CGDirectDisplayID
+
+    init(screen: NSScreen) {
+        self.displayID = screen.displayID
         super.init(
-            contentRect: initialFrame,
+            contentRect: screen.frame,
             styleMask: [.borderless],
             backing: .buffered,
             defer: false
@@ -16,16 +22,5 @@ class MascotWindow: NSWindow {
         collectionBehavior = [.canJoinAllSpaces, .stationary]
         isMovableByWindowBackground = false
         hasShadow = false
-    }
-
-    func refreshFrameToAllScreens() {
-        guard let frame = MascotWindow.unionFrame() else { return }
-        setFrame(frame, display: true)
-        contentView?.frame = NSRect(origin: .zero, size: frame.size)
-    }
-
-    private static func unionFrame() -> NSRect? {
-        let frame = NSScreen.boundingFrame()
-        return frame.isNull || frame.isEmpty ? nil : frame
     }
 }

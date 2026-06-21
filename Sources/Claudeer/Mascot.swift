@@ -6,22 +6,30 @@ class Mascot {
     let characterController: CharacterController
     let speechBubble: SpeechBubbleView
     private(set) var state: MascotState = .idle
+    private weak var placer: MascotPlacer?
 
     init(
         sessionID: String,
         spriteSize: NSSize,
         initialPosition: NSPoint,
-        container: NSView
+        placer: MascotPlacer
     ) {
         self.sessionID = sessionID
+        self.placer = placer
         let frame = NSRect(origin: initialPosition, size: spriteSize)
         self.spriteEngine = SpriteEngine(frame: frame)
+        self.spriteEngine.placer = placer
         self.characterController = CharacterController(spriteEngine: spriteEngine)
         self.speechBubble = SpeechBubbleView()
         self.speechBubble.isHidden = true
 
-        container.addSubview(spriteEngine.view)
-        container.addSubview(speechBubble)
+        // Place the sprite into the overlay window covering its initial position.
+        spriteEngine.setPosition(initialPosition)
+    }
+
+    /// The sprite's frame in global screen coordinates (for cross-window hit testing).
+    var globalFrame: NSRect {
+        NSRect(origin: spriteEngine.position, size: spriteEngine.size)
     }
 
     func start() {
@@ -40,11 +48,20 @@ class Mascot {
         state = newState
         spriteEngine.setState(newState)
         characterController.transitionTo(newState)
+
         let pos = spriteEngine.position
-        let above = NSPoint(
+        let globalAnchor = NSPoint(
             x: pos.x + spriteEngine.size.width / 2,
             y: pos.y + spriteEngine.size.height
         )
-        speechBubble.show(text: speech, above: above)
+        guard let host = placer?.hostView(forGlobalPoint: globalAnchor) else { return }
+        if speechBubble.superview !== host.view {
+            host.view.addSubview(speechBubble)
+        }
+        let localAnchor = NSPoint(
+            x: globalAnchor.x - host.globalOrigin.x,
+            y: globalAnchor.y - host.globalOrigin.y
+        )
+        speechBubble.show(text: speech, above: localAnchor)
     }
 }

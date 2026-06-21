@@ -2,14 +2,14 @@ import AppKit
 
 class MascotManager {
     private var mascots: [String: Mascot] = [:]
-    private let containerView: NSView
+    private let placer: MascotPlacer
     private let assetStore: AssetStore
     private var areas: [CGRect] = []
 
     static let spriteSize = NSSize(width: 64, height: 64)
 
-    init(containerView: NSView, assetStore: AssetStore) {
-        self.containerView = containerView
+    init(placer: MascotPlacer, assetStore: AssetStore) {
+        self.placer = placer
         self.assetStore = assetStore
     }
 
@@ -27,7 +27,7 @@ class MascotManager {
             sessionID: sessionID,
             spriteSize: Self.spriteSize,
             initialPosition: randomInitialPosition(),
-            container: containerView
+            placer: placer
         )
         mascot.spriteEngine.loadSprites(from: assetStore.spritesDirectory)
         mascot.spriteEngine.setFlips(assetStore.config.flips)

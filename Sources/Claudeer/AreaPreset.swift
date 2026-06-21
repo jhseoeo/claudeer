@@ -61,10 +61,6 @@ extension NSScreen {
         return CFUUIDCreateString(nil, uuid) as String?
     }
 
-    static func boundingFrame() -> CGRect {
-        screens.reduce(CGRect.null) { $0.union($1.frame) }
-    }
-
     static func screens(matching identifier: String?) -> [NSScreen] {
         guard let identifier = identifier else { return screens }
         if let match = screens.first(where: { $0.stableIdentifier == identifier }) {

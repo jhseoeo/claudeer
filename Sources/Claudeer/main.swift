@@ -2,7 +2,7 @@ import AppKit
 import Combine
 
 class AppDelegate: NSObject, NSApplicationDelegate {
-    var mascotWindow: MascotWindow?
+    var overlayController: OverlayWindowController?
     var mascotManager: MascotManager?
     var eventServer: EventServer?
     var eventManager: EventManager?
@@ -12,6 +12,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var interactionController: InteractionController?
     private var cancellables = Set<AnyCancellable>()
     private var currentPreset: AreaPreset = .bottom
+    private var currentTargetScreenID: String?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -19,19 +20,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let store = AssetStore(baseDirectory: AssetStore.defaultBaseDirectory)
         assetStore = store
 
-        mascotWindow = MascotWindow()
-
-        let contentView = InteractionView(frame: NSRect(origin: .zero, size: mascotWindow!.frame.size))
-        contentView.wantsLayer = true
-        mascotWindow?.contentView = contentView
+        let overlay = OverlayWindowController()
+        overlayController = overlay
 
         soundPlayer = SoundPlayer()
         soundPlayer?.loadSounds(from: store.soundsDirectory)
 
-        let manager = MascotManager(containerView: contentView, assetStore: store)
+        let manager = MascotManager(placer: overlay, assetStore: store)
         mascotManager = manager
         currentPreset = AreaPreset(rawValue: store.config.defaultArea) ?? .bottom
-        refreshAreas()
 
         let sessionTracker = SessionTracker()
         eventManager = EventManager(
@@ -49,15 +46,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self.soundPlayer?.loadSounds(from: store.soundsDirectory)
             self.eventManager?.config = store.config
             self.eventManager?.syncLoop()
+            if self.currentTargetScreenID != store.config.targetScreenID {
+                self.currentTargetScreenID = store.config.targetScreenID
+                self.overlayController?.configure(targetScreenID: store.config.targetScreenID)
+            }
             self.refreshAreas()
         }
 
         interactionController = InteractionController(
-            window: mascotWindow!,
-            interactionView: contentView,
+            overlay: overlay,
             mascotManager: manager,
             soundPlayer: soundPlayer!
         )
+
+        // Build the overlay windows (one per active screen) with the interaction
+        // delegate wired, then lay out roaming areas in global coordinates.
+        currentTargetScreenID = store.config.targetScreenID
+        overlay.configure(targetScreenID: currentTargetScreenID)
+        refreshAreas()
         interactionController?.start()
 
         eventServer = EventServer()
@@ -81,11 +87,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         sessionTracker.$sessions
             .sink { [weak self] sessions in
-                guard let window = self?.mascotWindow else { return }
+                guard let overlay = self?.overlayController else { return }
                 if sessions.isEmpty {
-                    window.orderOut(nil)
-                } else if !window.isVisible {
-                    window.orderFront(nil)
+                    overlay.hideAll()
+                } else {
+                    overlay.showAll()
                 }
             }
             .store(in: &cancellables)
@@ -108,24 +114,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func screensDidChange() {
-        mascotWindow?.refreshFrameToAllScreens()
+        overlayController?.rebuild()
         refreshAreas()
     }
 
     private func refreshAreas() {
-        guard let store = assetStore, let window = mascotWindow else { return }
+        guard let store = assetStore else { return }
         let active = NSScreen.screens(matching: store.config.targetScreenID)
         let globalRects = currentPreset.rects(for: active)
-        let origin = window.frame.origin
-        let localRects = globalRects.map { rect in
-            CGRect(
-                x: rect.minX - origin.x,
-                y: rect.minY - origin.y,
-                width: rect.width,
-                height: rect.height
-            )
-        }
-        mascotManager?.setAreas(localRects)
+        mascotManager?.setAreas(globalRects)
     }
 }
 

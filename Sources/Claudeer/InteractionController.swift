@@ -1,7 +1,7 @@
 import AppKit
 
 class InteractionController: InteractionViewDelegate {
-    private weak var window: NSWindow?
+    private let overlay: OverlayWindowController
     private let mascotManager: MascotManager
     private let soundPlayer: SoundPlayer
 
@@ -11,22 +11,22 @@ class InteractionController: InteractionViewDelegate {
     private var isMouseDown = false
     private var hasDragged = false
     private var dragOffset: NSPoint = .zero
-    private var mouseDownLocation: NSPoint = .zero
+    private var mouseDownGlobal: NSPoint = .zero
     private weak var activeMascot: Mascot?
+    private weak var activeWindow: NSWindow?
 
     private let dragThreshold: CGFloat = 4.0
     private let clickSpriteDuration: TimeInterval = 1.0
 
     init(
-        window: NSWindow,
-        interactionView: InteractionView,
+        overlay: OverlayWindowController,
         mascotManager: MascotManager,
         soundPlayer: SoundPlayer
     ) {
-        self.window = window
+        self.overlay = overlay
         self.mascotManager = mascotManager
         self.soundPlayer = soundPlayer
-        interactionView.delegate = self
+        overlay.interactionDelegate = self
     }
 
     func start() {
@@ -40,24 +40,38 @@ class InteractionController: InteractionViewDelegate {
         pollingTimer = nil
     }
 
+    /// Only the overlay window the cursor is hovering a mascot in should receive mouse
+    /// events; all others stay click-through. While dragging, the window that captured
+    /// the drag keeps receiving events.
     private func updateCursorHover() {
-        guard let window = window else { return }
         if isMouseDown {
-            window.ignoresMouseEvents = false
+            setExclusiveReceiver(activeWindow)
             return
         }
         let mouse = NSEvent.mouseLocation
-        let mouseInWindow = NSPoint(x: mouse.x - window.frame.minX, y: mouse.y - window.frame.minY)
-        let inside = mascotManager.allMascots.contains {
-            $0.spriteEngine.view.frame.contains(mouseInWindow)
-        }
-        window.ignoresMouseEvents = !inside
+        let host = mascotManager.allMascots
+            .first { $0.globalFrame.contains(mouse) }?
+            .spriteEngine.view.window
+        setExclusiveReceiver(host)
     }
 
-    func interactionMouseDown(at locationInWindow: NSPoint) {
-        let target = mascotManager.allMascots.first {
-            $0.spriteEngine.view.frame.contains(locationInWindow)
+    private func setExclusiveReceiver(_ receiver: NSWindow?) {
+        for window in overlay.windows {
+            window.ignoresMouseEvents = (window !== receiver)
         }
+    }
+
+    private func globalPoint(_ locationInWindow: NSPoint, in view: InteractionView) -> NSPoint? {
+        guard let window = view.window else { return nil }
+        return NSPoint(
+            x: window.frame.minX + locationInWindow.x,
+            y: window.frame.minY + locationInWindow.y
+        )
+    }
+
+    func interactionMouseDown(at locationInWindow: NSPoint, in view: InteractionView) {
+        guard let global = globalPoint(locationInWindow, in: view) else { return }
+        let target = mascotManager.allMascots.first { $0.globalFrame.contains(global) }
         guard let target = target else { return }
 
         clickClearWorkItem?.cancel()
@@ -66,20 +80,22 @@ class InteractionController: InteractionViewDelegate {
 
         isMouseDown = true
         hasDragged = false
-        mouseDownLocation = locationInWindow
-        let frame = target.spriteEngine.view.frame
+        mouseDownGlobal = global
+        activeWindow = view.window
+        let frame = target.globalFrame
         dragOffset = NSPoint(
-            x: frame.origin.x - locationInWindow.x,
-            y: frame.origin.y - locationInWindow.y
+            x: frame.origin.x - global.x,
+            y: frame.origin.y - global.y
         )
         target.characterController.setBeingDragged(true)
         activeMascot = target
     }
 
-    func interactionMouseDragged(to locationInWindow: NSPoint) {
-        guard isMouseDown, let mascot = activeMascot else { return }
-        let dx = locationInWindow.x - mouseDownLocation.x
-        let dy = locationInWindow.y - mouseDownLocation.y
+    func interactionMouseDragged(to locationInWindow: NSPoint, in view: InteractionView) {
+        guard isMouseDown, let mascot = activeMascot,
+              let global = globalPoint(locationInWindow, in: view) else { return }
+        let dx = global.x - mouseDownGlobal.x
+        let dy = global.y - mouseDownGlobal.y
         let dist = sqrt(dx * dx + dy * dy)
 
         if !hasDragged && dist >= dragThreshold {
@@ -88,15 +104,15 @@ class InteractionController: InteractionViewDelegate {
             soundPlayer.playInteraction(.dragPress)
         }
         if hasDragged {
-            let newOrigin = NSPoint(
-                x: locationInWindow.x + dragOffset.x,
-                y: locationInWindow.y + dragOffset.y
+            let newGlobalOrigin = NSPoint(
+                x: global.x + dragOffset.x,
+                y: global.y + dragOffset.y
             )
-            mascot.characterController.setSpritePosition(newOrigin)
+            mascot.characterController.setSpritePosition(newGlobalOrigin)
         }
     }
 
-    func interactionMouseUp(at locationInWindow: NSPoint) {
+    func interactionMouseUp(at locationInWindow: NSPoint, in view: InteractionView) {
         guard isMouseDown, let mascot = activeMascot else { return }
         isMouseDown = false
 
@@ -115,6 +131,7 @@ class InteractionController: InteractionViewDelegate {
         }
         mascot.characterController.setBeingDragged(false)
         activeMascot = nil
+        activeWindow = nil
         hasDragged = false
     }
 }
