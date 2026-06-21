@@ -5,12 +5,22 @@ struct SpeakiEvent: Codable {
     let sessionId: String
     let pid: Int?
     let cwd: String?
+    let name: String?
 
     enum CodingKeys: String, CodingKey {
         case state
         case sessionId = "session_id"
         case pid
         case cwd
+        case name
+    }
+
+    init(state: MascotState, sessionId: String, pid: Int?, cwd: String?, name: String? = nil) {
+        self.state = state
+        self.sessionId = sessionId
+        self.pid = pid
+        self.cwd = cwd
+        self.name = name
     }
 }
 

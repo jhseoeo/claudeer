@@ -34,6 +34,7 @@ class MascotManager {
         mascot.characterController.setAreas(areas)
         mascot.characterController.setMovement(assetStore.config.movements)
         mascot.characterController.setSpeed(CGFloat(assetStore.config.speed))
+        mascot.setLabelVisible(assetStore.config.showSessionLabel)
         mascot.start()
         mascots[sessionID] = mascot
         return mascot
@@ -58,6 +59,7 @@ class MascotManager {
             mascot.spriteEngine.setFlips(assetStore.config.flips)
             mascot.characterController.setMovement(assetStore.config.movements)
             mascot.characterController.setSpeed(CGFloat(assetStore.config.speed))
+            mascot.setLabelVisible(assetStore.config.showSessionLabel)
         }
     }
 

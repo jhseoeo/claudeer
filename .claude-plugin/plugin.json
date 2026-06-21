@@ -1,6 +1,6 @@
 {
   "name": "claudeer",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "Desktop mascot that reacts to Claude Code session events with animations and sounds",
   "author": {
     "name": "jhseo"

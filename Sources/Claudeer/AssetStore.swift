@@ -139,13 +139,18 @@ class AssetStore: ObservableObject {
         setConfig(targetScreenID: .some(identifier))
     }
 
+    func updateShowSessionLabel(_ value: Bool) {
+        setConfig(showSessionLabel: value)
+    }
+
     private func setConfig(
         speeches: Speeches? = nil,
         loops: LoopSettings? = nil,
         movements: MovementSettings? = nil,
         speed: Double? = nil,
         flips: FlipSettings? = nil,
-        targetScreenID: String??  = nil
+        targetScreenID: String??  = nil,
+        showSessionLabel: Bool? = nil
     ) {
         config = SpeakiConfig(
             defaultArea: config.defaultArea,
@@ -154,7 +159,8 @@ class AssetStore: ObservableObject {
             movements: movements ?? config.movements,
             speed: speed ?? config.speed,
             flips: flips ?? config.flips,
-            targetScreenID: targetScreenID ?? config.targetScreenID
+            targetScreenID: targetScreenID ?? config.targetScreenID,
+            showSessionLabel: showSessionLabel ?? config.showSessionLabel
         )
         try? config.save(to: configURL)
         notify()

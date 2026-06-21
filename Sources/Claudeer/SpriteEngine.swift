@@ -13,6 +13,8 @@ class SpriteEngine {
 
     /// Routes the sprite view into the overlay window covering its current position.
     weak var placer: MascotPlacer?
+    /// Called after every placement so siblings (e.g. the name label) can follow.
+    var onPlaced: (() -> Void)?
     private var globalPosition: NSPoint
 
     init(frame: NSRect) {
@@ -101,6 +103,7 @@ class SpriteEngine {
             x: globalPosition.x - host.globalOrigin.x,
             y: globalPosition.y - host.globalOrigin.y
         ))
+        onPlaced?()
     }
 
     func setFlips(_ settings: FlipSettings) {

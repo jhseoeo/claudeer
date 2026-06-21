@@ -20,6 +20,8 @@ struct PreferencesView: View {
                 Divider()
                 flipSection
                 Divider()
+                labelsSection
+                Divider()
                 interactionsSection
             }
             .padding(20)
@@ -103,6 +105,17 @@ struct PreferencesView: View {
 
     private var screenSection: some View {
         ScreenPickerSection(assetStore: assetStore)
+    }
+
+    private var labelsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Labels").font(.headline)
+            Toggle("Show session name under each mascot", isOn: Binding(
+                get: { assetStore.config.showSessionLabel },
+                set: { assetStore.updateShowSessionLabel($0) }
+            ))
+            .toggleStyle(.checkbox)
+        }
     }
 
     private var flipSection: some View {

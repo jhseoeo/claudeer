@@ -5,6 +5,7 @@
 DerivedData/
 .DS_Store
 temp/
+__pycache__/
 settings.local.json
 dist/
 .claude/

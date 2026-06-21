@@ -24,6 +24,7 @@ class EventManager {
     func handleEvent(_ event: SpeakiEvent) {
         sessionTracker.record(event)
         let mascot = mascotManager.ensureMascot(sessionID: event.sessionId)
+        mascot.setName(event.name)
         mascot.applyTransition(to: event.state, speech: speech(for: event.state))
         updateGlobalState()
     }
