@@ -5,6 +5,9 @@ class InteractionController: InteractionViewDelegate {
     private let mascotManager: MascotManager
     private let soundPlayer: SoundPlayer
 
+    /// Called when a mascot is double-clicked (used to focus its session's terminal).
+    var onMascotDoubleClicked: ((Mascot) -> Void)?
+
     private var pollingTimer: Timer?
     private var clickClearWorkItem: DispatchWorkItem?
 
@@ -112,13 +115,17 @@ class InteractionController: InteractionViewDelegate {
         }
     }
 
-    func interactionMouseUp(at locationInWindow: NSPoint, in view: InteractionView) {
+    func interactionMouseUp(at locationInWindow: NSPoint, clickCount: Int, in view: InteractionView) {
         guard isMouseDown, let mascot = activeMascot else { return }
         isMouseDown = false
 
         if hasDragged {
             soundPlayer.playInteraction(.dragRelease)
             mascot.spriteEngine.clearInteractionSprite()
+        } else if clickCount >= 2 {
+            // Double-click: focus the terminal hosting this mascot's session.
+            mascot.spriteEngine.clearInteractionSprite()
+            onMascotDoubleClicked?(mascot)
         } else {
             soundPlayer.playInteraction(.click)
             mascot.spriteEngine.playInteractionSprite(.click)

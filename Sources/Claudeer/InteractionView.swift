@@ -3,7 +3,7 @@ import AppKit
 protocol InteractionViewDelegate: AnyObject {
     func interactionMouseDown(at locationInWindow: NSPoint, in view: InteractionView)
     func interactionMouseDragged(to locationInWindow: NSPoint, in view: InteractionView)
-    func interactionMouseUp(at locationInWindow: NSPoint, in view: InteractionView)
+    func interactionMouseUp(at locationInWindow: NSPoint, clickCount: Int, in view: InteractionView)
 }
 
 class InteractionView: NSView {
@@ -22,6 +22,6 @@ class InteractionView: NSView {
     }
 
     override func mouseUp(with event: NSEvent) {
-        delegate?.interactionMouseUp(at: event.locationInWindow, in: self)
+        delegate?.interactionMouseUp(at: event.locationInWindow, clickCount: event.clickCount, in: self)
     }
 }

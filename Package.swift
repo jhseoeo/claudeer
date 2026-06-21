@@ -13,6 +13,8 @@ let package = Package(
             linkerSettings: [
                 .linkedFramework("AppKit"),
                 .linkedFramework("AVFoundation"),
+                .linkedFramework("ApplicationServices"),
+                .linkedFramework("Carbon"),
             ]
         ),
         .testTarget(

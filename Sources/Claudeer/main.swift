@@ -58,6 +58,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             mascotManager: manager,
             soundPlayer: soundPlayer!
         )
+        interactionController?.onMascotDoubleClicked = { mascot in
+            guard let pid = sessionTracker.pid(for: mascot.sessionID) else { return }
+            let cwd = sessionTracker.cwd(for: mascot.sessionID)
+            // Off the main thread: the off-Space window search can take a few
+            // hundred ms. Running async also defers past AppKit's post-click
+            // activation handling, which would otherwise clobber the focus.
+            DispatchQueue.global(qos: .userInitiated).async {
+                WindowFocuser.focus(pid: pid, cwd: cwd)
+            }
+        }
 
         // Build the overlay windows (one per active screen) with the interaction
         // delegate wired, then lay out roaming areas in global coordinates.

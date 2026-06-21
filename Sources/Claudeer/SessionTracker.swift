@@ -52,6 +52,16 @@ class SessionTracker: ObservableObject {
         sessionMap.values.contains { $0.state == .working }
     }
 
+    /// The Claude Code process pid for a session, used to focus its terminal.
+    func pid(for sessionID: String) -> Int? {
+        sessionMap[sessionID]?.pid
+    }
+
+    /// The working directory for a session, used to match its window by title.
+    func cwd(for sessionID: String) -> String? {
+        sessionMap[sessionID]?.cwd
+    }
+
     private func publishSessions() {
         sessions = sessionMap.values.sorted { $0.lastSeen > $1.lastSeen }
     }
