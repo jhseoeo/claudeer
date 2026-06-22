@@ -106,6 +106,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             .store(in: &cancellables)
 
+        sessionTracker.$hiddenSessionIDs
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] ids in
+                self?.mascotManager?.setHidden(ids)
+            }
+            .store(in: &cancellables)
+
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(screensDidChange),

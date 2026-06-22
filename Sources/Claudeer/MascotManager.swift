@@ -20,6 +20,12 @@ class MascotManager {
         }
     }
 
+    func setHidden(_ ids: Set<String>) {
+        for mascot in mascots.values {
+            mascot.setHidden(ids.contains(mascot.sessionID))
+        }
+    }
+
     @discardableResult
     func ensureMascot(sessionID: String) -> Mascot {
         if let existing = mascots[sessionID] { return existing }
