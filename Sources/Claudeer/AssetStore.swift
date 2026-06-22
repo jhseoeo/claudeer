@@ -143,6 +143,10 @@ class AssetStore: ObservableObject {
         setConfig(showSessionLabel: value)
     }
 
+    func updateNtfy(_ value: NtfySettings) {
+        setConfig(ntfy: value)
+    }
+
     private func setConfig(
         speeches: Speeches? = nil,
         loops: LoopSettings? = nil,
@@ -150,7 +154,8 @@ class AssetStore: ObservableObject {
         speed: Double? = nil,
         flips: FlipSettings? = nil,
         targetScreenID: String??  = nil,
-        showSessionLabel: Bool? = nil
+        showSessionLabel: Bool? = nil,
+        ntfy: NtfySettings? = nil
     ) {
         config = SpeakiConfig(
             defaultArea: config.defaultArea,
@@ -160,7 +165,8 @@ class AssetStore: ObservableObject {
             speed: speed ?? config.speed,
             flips: flips ?? config.flips,
             targetScreenID: targetScreenID ?? config.targetScreenID,
-            showSessionLabel: showSessionLabel ?? config.showSessionLabel
+            showSessionLabel: showSessionLabel ?? config.showSessionLabel,
+            ntfy: ntfy ?? config.ntfy
         )
         try? config.save(to: configURL)
         notify()

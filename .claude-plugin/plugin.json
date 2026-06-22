@@ -1,7 +1,7 @@
 {
   "name": "claudeer",
-  "version": "0.8.0",
-  "description": "Desktop mascot that reacts to Claude Code session events with animations and sounds",
+  "version": "0.9.0",
+  "description": "Desktop mascot that reacts to Claude Code session events with animations, sounds, and ntfy.sh push notifications",
   "author": {
     "name": "jhseo"
   },

@@ -22,6 +22,8 @@ struct PreferencesView: View {
                 Divider()
                 labelsSection
                 Divider()
+                NtfySection(assetStore: assetStore)
+                Divider()
                 interactionsSection
             }
             .padding(20)
@@ -263,6 +265,109 @@ private struct ScreenPickerSection: View {
         let w = Int(screen.frame.width)
         let h = Int(screen.frame.height)
         return "\(name) (\(w)×\(h))"
+    }
+}
+
+private struct NtfySection: View {
+    @ObservedObject var assetStore: AssetStore
+
+    private enum Field { case server, topic, token }
+    @FocusState private var focused: Field?
+    @State private var server: String = ""
+    @State private var topic: String = ""
+    @State private var token: String = ""
+    @State private var testResult: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Notifications").font(.headline)
+            Toggle("Push to ntfy.sh when a session goes idle", isOn: Binding(
+                get: { assetStore.config.ntfy.enabled },
+                set: { assetStore.updateNtfy(settings(enabled: $0)) }
+            ))
+            .toggleStyle(.checkbox)
+
+            field("Server", text: $server, placeholder: NtfySettings.defaultServer, focus: .server)
+            field("Topic", text: $topic, placeholder: "e.g. claudeer-7f3a9c", focus: .topic)
+            field("Token", text: $token, placeholder: "optional access token", focus: .token, secure: true)
+
+            HStack(spacing: 8) {
+                Button("Send test") { sendTest() }
+                    .disabled(topic.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                if let testResult = testResult {
+                    Text(testResult).font(.caption).foregroundColor(.secondary)
+                }
+            }
+
+            Text("Subscribe to the same topic in the ntfy app or at \(displayServer)/\(displayTopic) to get a push when Claude finishes and needs you. Title is the session name; body is the Idle speech above.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .onAppear { load() }
+        .onChange(of: focused) { newValue in
+            if newValue == nil { commit() }
+        }
+    }
+
+    @ViewBuilder
+    private func field(_ label: String, text: Binding<String>, placeholder: String, focus: Field, secure: Bool = false) -> some View {
+        HStack {
+            Text(label).frame(width: 80, alignment: .leading)
+            Group {
+                if secure {
+                    SecureField(placeholder, text: text)
+                } else {
+                    TextField(placeholder, text: text)
+                }
+            }
+            .textFieldStyle(.roundedBorder)
+            .focused($focused, equals: focus)
+            .onSubmit { commit() }
+        }
+    }
+
+    private var displayServer: String {
+        let trimmed = server.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? NtfySettings.defaultServer : trimmed
+    }
+
+    private var displayTopic: String {
+        let trimmed = topic.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "<topic>" : trimmed
+    }
+
+    private func settings(enabled: Bool) -> NtfySettings {
+        let trimmedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        return NtfySettings(
+            enabled: enabled,
+            server: displayServer,
+            topic: topic.trimmingCharacters(in: .whitespacesAndNewlines),
+            token: trimmedToken.isEmpty ? nil : trimmedToken
+        )
+    }
+
+    private func load() {
+        let ntfy = assetStore.config.ntfy
+        server = ntfy.server
+        topic = ntfy.topic
+        token = ntfy.token ?? ""
+    }
+
+    private func commit() {
+        let updated = settings(enabled: assetStore.config.ntfy.enabled)
+        if updated.server != assetStore.config.ntfy.server
+            || updated.topic != assetStore.config.ntfy.topic
+            || updated.token != assetStore.config.ntfy.token {
+            assetStore.updateNtfy(updated)
+        }
+    }
+
+    private func sendTest() {
+        commit()
+        // Force-enable for the test so it sends even before the toggle is on.
+        let test = settings(enabled: true)
+        NtfyNotifier(settings: test).notify(title: "Claudeer", body: "Test notification ✅")
+        testResult = "Sent — check your device"
     }
 }
 

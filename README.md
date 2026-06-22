@@ -89,6 +89,18 @@ open dist/Claudeer.app
 
 > 캐릭터 위에 마우스를 올리면 클릭 가능. mouseDown 후 4px 이상 움직이면 드래그로 인식. 드래그 중에는 캐릭터의 자체 이동이 멈춥니다.
 
+**Notifications (ntfy.sh)** — Claude가 작업을 끝내고 입력을 기다리는 순간을 [ntfy.sh](https://ntfy.sh) 푸시로 폰·데스크톱에 받기. 자리를 비웠을 때 유용해요. 전부 옵셔널.
+
+| 항목 | 의미 |
+|------|------|
+| `Push to ntfy.sh when a session goes idle` | 켜면 세션이 idle로 전환될 때마다 푸시 발송 |
+| `Server` | ntfy 서버 주소 (기본 `https://ntfy.sh`, 셀프호스팅 가능) |
+| `Topic` | 구독할 토픽 이름. 추측 어려운 고유 문자열 권장 (공개 토픽은 누구나 구독 가능) |
+| `Token` | 보호된/예약된 토픽용 액세스 토큰 (선택) |
+| `Send test` | 현재 설정으로 테스트 푸시 1회 발송 |
+
+푸시 **제목**은 세션 이름, **본문**은 위 `idle` 말풍선 텍스트예요. ntfy 앱이나 `https://<server>/<topic>` 에서 같은 토픽을 구독하면 받을 수 있어요. 앱(메뉴바 데몬)이 떠 있어야 발송됩니다.
+
 ### Area Presets
 
 Choose where the mascot roams via the menu bar icon (🐾):
@@ -108,5 +120,5 @@ Choose where the mascot roams via the menu bar icon (🐾):
    - `UserPromptSubmit` → `working`
    - `Stop` → `idle`
    - `Notification` → `idle`
-3. 상태가 실제로 바뀌는 순간에만 스프라이트 교체 + 사운드 + 말풍선
+3. 상태가 실제로 바뀌는 순간에만 스프라이트 교체 + 사운드 + 말풍선 (+ 설정 시 `idle` 전환마다 ntfy.sh 푸시)
 4. If the app isn't running, hooks silently fail (no impact on Claude Code)

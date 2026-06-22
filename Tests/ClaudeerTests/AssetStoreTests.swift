@@ -244,6 +244,28 @@ final class AssetStoreTests: XCTestCase {
         XCTAssertEqual(reloaded.speeches.idle, SpeakiConfig.default.speeches.idle)
     }
 
+    func testUpdateNtfyPersistsAndPreservesOthers() throws {
+        let store = AssetStore(baseDirectory: tempDir)
+        store.updateSpeech(for: .idle, text: "Hello")
+        store.updateNtfy(NtfySettings(enabled: true, server: "https://n.example", topic: "topic-x", token: "k"))
+
+        let reloaded = SpeakiConfig.load(from: store.configURL)
+        XCTAssertTrue(reloaded.ntfy.enabled)
+        XCTAssertEqual(reloaded.ntfy.server, "https://n.example")
+        XCTAssertEqual(reloaded.ntfy.topic, "topic-x")
+        XCTAssertEqual(reloaded.ntfy.token, "k")
+        XCTAssertEqual(reloaded.speeches.idle, "Hello")
+    }
+
+    func testOnAssetsChangedFiresAfterUpdateNtfy() {
+        let store = AssetStore(baseDirectory: tempDir)
+        var fired = 0
+        store.onAssetsChanged = { fired += 1 }
+
+        store.updateNtfy(NtfySettings(enabled: true, server: "https://ntfy.sh", topic: "t", token: nil))
+        XCTAssertEqual(fired, 1)
+    }
+
     func testOnAssetsChangedFiresAfterRegister() throws {
         let store = AssetStore(baseDirectory: tempDir)
         var fired = 0

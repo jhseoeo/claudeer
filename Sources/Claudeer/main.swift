@@ -10,6 +10,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var menuBarController: MenuBarController?
     var assetStore: AssetStore?
     var interactionController: InteractionController?
+    var ntfyNotifier: NtfyNotifier?
     private var cancellables = Set<AnyCancellable>()
     private var currentPreset: AreaPreset = .bottom
     private var currentTargetScreenID: String?
@@ -31,10 +32,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         currentPreset = AreaPreset(rawValue: store.config.defaultArea) ?? .bottom
 
         let sessionTracker = SessionTracker()
+        let notifier = NtfyNotifier(settings: store.config.ntfy)
+        ntfyNotifier = notifier
         eventManager = EventManager(
             mascotManager: manager,
             soundPlayer: soundPlayer!,
             sessionTracker: sessionTracker,
+            notifier: notifier,
             config: store.config
         )
         eventManager?.startPIDMonitoring()
@@ -46,6 +50,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self.soundPlayer?.loadSounds(from: store.soundsDirectory)
             self.eventManager?.config = store.config
             self.eventManager?.syncLoop()
+            self.ntfyNotifier?.settings = store.config.ntfy
             if self.currentTargetScreenID != store.config.targetScreenID {
                 self.currentTargetScreenID = store.config.targetScreenID
                 self.overlayController?.configure(targetScreenID: store.config.targetScreenID)

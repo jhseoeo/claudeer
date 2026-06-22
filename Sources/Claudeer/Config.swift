@@ -40,6 +40,18 @@ struct FlipSettings: Codable {
     static let off = FlipSettings(directional: false, mirrored: false)
 }
 
+/// Push-notification settings for ntfy.sh (or a self-hosted ntfy server).
+/// A push fires when a session transitions to `idle`, mirroring the speech bubble.
+struct NtfySettings: Codable {
+    let enabled: Bool
+    let server: String
+    let topic: String
+    let token: String?
+
+    static let defaultServer = "https://ntfy.sh"
+    static let off = NtfySettings(enabled: false, server: defaultServer, topic: "", token: nil)
+}
+
 struct SpeakiConfig: Codable {
     let defaultArea: String
     let speeches: Speeches
@@ -49,6 +61,7 @@ struct SpeakiConfig: Codable {
     let flips: FlipSettings
     let targetScreenID: String?
     let showSessionLabel: Bool
+    let ntfy: NtfySettings
 
     static let defaultSpeed: Double = 2.0
     static let speedRange: ClosedRange<Double> = 0.5...6.0
@@ -62,9 +75,10 @@ struct SpeakiConfig: Codable {
         case flips
         case targetScreenID = "target_screen_id"
         case showSessionLabel = "show_session_label"
+        case ntfy
     }
 
-    init(defaultArea: String, speeches: Speeches, loops: LoopSettings, movements: MovementSettings, speed: Double, flips: FlipSettings, targetScreenID: String? = nil, showSessionLabel: Bool = true) {
+    init(defaultArea: String, speeches: Speeches, loops: LoopSettings, movements: MovementSettings, speed: Double, flips: FlipSettings, targetScreenID: String? = nil, showSessionLabel: Bool = true, ntfy: NtfySettings = .off) {
         self.defaultArea = defaultArea
         self.speeches = speeches
         self.loops = loops
@@ -73,6 +87,7 @@ struct SpeakiConfig: Codable {
         self.flips = flips
         self.targetScreenID = targetScreenID
         self.showSessionLabel = showSessionLabel
+        self.ntfy = ntfy
     }
 
     init(from decoder: Decoder) throws {
@@ -85,6 +100,7 @@ struct SpeakiConfig: Codable {
         self.flips = try container.decodeIfPresent(FlipSettings.self, forKey: .flips) ?? .off
         self.targetScreenID = try container.decodeIfPresent(String.self, forKey: .targetScreenID)
         self.showSessionLabel = try container.decodeIfPresent(Bool.self, forKey: .showSessionLabel) ?? true
+        self.ntfy = try container.decodeIfPresent(NtfySettings.self, forKey: .ntfy) ?? .off
     }
 
     static let `default` = SpeakiConfig(
@@ -98,7 +114,8 @@ struct SpeakiConfig: Codable {
         speed: defaultSpeed,
         flips: .off,
         targetScreenID: nil,
-        showSessionLabel: true
+        showSessionLabel: true,
+        ntfy: .off
     )
 
     static func load(from url: URL) -> SpeakiConfig {

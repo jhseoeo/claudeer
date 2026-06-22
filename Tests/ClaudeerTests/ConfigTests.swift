@@ -131,4 +131,70 @@ final class ConfigTests: XCTestCase {
         XCTAssertTrue(reloaded.flips.directional)
         XCTAssertFalse(reloaded.flips.mirrored)
     }
+
+    func testParseConfigWithNtfy() throws {
+        let json = """
+        {
+          "default_area": "bottom",
+          "speeches": { "idle": "a", "working": "b" },
+          "ntfy": {
+            "enabled": true,
+            "server": "https://ntfy.example.com",
+            "topic": "my-claude",
+            "token": "tk_secret"
+          }
+        }
+        """.data(using: .utf8)!
+
+        let config = try JSONDecoder().decode(SpeakiConfig.self, from: json)
+        XCTAssertTrue(config.ntfy.enabled)
+        XCTAssertEqual(config.ntfy.server, "https://ntfy.example.com")
+        XCTAssertEqual(config.ntfy.topic, "my-claude")
+        XCTAssertEqual(config.ntfy.token, "tk_secret")
+    }
+
+    func testParseConfigWithoutNtfyDefaultsOff() throws {
+        let json = """
+        {
+          "default_area": "bottom",
+          "speeches": { "idle": "a", "working": "b" }
+        }
+        """.data(using: .utf8)!
+
+        let config = try JSONDecoder().decode(SpeakiConfig.self, from: json)
+        XCTAssertFalse(config.ntfy.enabled)
+        XCTAssertEqual(config.ntfy.server, "https://ntfy.sh")
+        XCTAssertTrue(config.ntfy.topic.isEmpty)
+        XCTAssertNil(config.ntfy.token)
+    }
+
+    func testDefaultConfigNtfyOff() {
+        let config = SpeakiConfig.default
+        XCTAssertFalse(config.ntfy.enabled)
+        XCTAssertEqual(config.ntfy.server, "https://ntfy.sh")
+        XCTAssertTrue(config.ntfy.topic.isEmpty)
+    }
+
+    func testSaveAndReloadNtfy() throws {
+        let original = SpeakiConfig(
+            defaultArea: "bottom",
+            speeches: Speeches(idle: "a", working: "b"),
+            loops: .off,
+            movements: .allOn,
+            speed: 2.0,
+            flips: .off,
+            ntfy: NtfySettings(enabled: true, server: "https://n.example", topic: "t", token: "k")
+        )
+        let tmpURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("claudeer-test-\(UUID().uuidString).json")
+        defer { try? FileManager.default.removeItem(at: tmpURL) }
+
+        try original.save(to: tmpURL)
+        let reloaded = SpeakiConfig.load(from: tmpURL)
+
+        XCTAssertTrue(reloaded.ntfy.enabled)
+        XCTAssertEqual(reloaded.ntfy.server, "https://n.example")
+        XCTAssertEqual(reloaded.ntfy.topic, "t")
+        XCTAssertEqual(reloaded.ntfy.token, "k")
+    }
 }
