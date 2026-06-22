@@ -111,11 +111,11 @@ class Mascot {
     }
 
     private func updateLabelVisibility() {
-        nameLabel.isHidden = !showLabel || displayName.isEmpty
+        nameLabel.isHidden = isHidden || !showLabel || displayName.isEmpty
     }
 
     private func layoutNameLabel() {
-        guard showLabel, !displayName.isEmpty, let placer = placer else { return }
+        guard !isHidden, showLabel, !displayName.isEmpty, let placer = placer else { return }
         let pos = spriteEngine.position
         let size = spriteEngine.size
         let center = NSPoint(x: pos.x + size.width / 2, y: pos.y + size.height / 2)
