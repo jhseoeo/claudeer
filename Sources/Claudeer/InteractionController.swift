@@ -1,12 +1,15 @@
 import AppKit
 
-class InteractionController: InteractionViewDelegate {
+class InteractionController: NSObject, InteractionViewDelegate {
     private let overlay: OverlayWindowController
     private let mascotManager: MascotManager
     private let soundPlayer: SoundPlayer
 
     /// Called when a mascot is double-clicked (used to focus its session's terminal).
     var onMascotDoubleClicked: ((Mascot) -> Void)?
+
+    /// Called when the user picks "Hide this character" from a mascot's right-click menu.
+    var onMascotHideRequested: ((Mascot) -> Void)?
 
     private var pollingTimer: Timer?
     private var clickClearWorkItem: DispatchWorkItem?
@@ -17,6 +20,7 @@ class InteractionController: InteractionViewDelegate {
     private var mouseDownGlobal: NSPoint = .zero
     private weak var activeMascot: Mascot?
     private weak var activeWindow: NSWindow?
+    private weak var rightClickedMascot: Mascot?
 
     private let dragThreshold: CGFloat = 4.0
     private let clickSpriteDuration: TimeInterval = 1.0
@@ -29,6 +33,7 @@ class InteractionController: InteractionViewDelegate {
         self.overlay = overlay
         self.mascotManager = mascotManager
         self.soundPlayer = soundPlayer
+        super.init()
         overlay.interactionDelegate = self
     }
 
@@ -53,7 +58,7 @@ class InteractionController: InteractionViewDelegate {
         }
         let mouse = NSEvent.mouseLocation
         let host = mascotManager.allMascots
-            .first { $0.globalFrame.contains(mouse) }?
+            .first { !$0.isHidden && $0.globalFrame.contains(mouse) }?
             .spriteEngine.view.window
         setExclusiveReceiver(host)
     }
@@ -74,7 +79,7 @@ class InteractionController: InteractionViewDelegate {
 
     func interactionMouseDown(at locationInWindow: NSPoint, in view: InteractionView) {
         guard let global = globalPoint(locationInWindow, in: view) else { return }
-        let target = mascotManager.allMascots.first { $0.globalFrame.contains(global) }
+        let target = mascotManager.allMascots.first { !$0.isHidden && $0.globalFrame.contains(global) }
         guard let target = target else { return }
 
         clickClearWorkItem?.cancel()
@@ -140,5 +145,30 @@ class InteractionController: InteractionViewDelegate {
         activeMascot = nil
         activeWindow = nil
         hasDragged = false
+    }
+
+    func interactionRightMouseDown(at locationInWindow: NSPoint, in view: InteractionView) {
+        guard let global = globalPoint(locationInWindow, in: view) else { return }
+        guard let target = mascotManager.allMascots.first(where: {
+            !$0.isHidden && $0.globalFrame.contains(global)
+        }) else { return }
+
+        rightClickedMascot = target
+        let menu = NSMenu()
+        let item = NSMenuItem(
+            title: "Hide this character",
+            action: #selector(hideClickedMascot),
+            keyEquivalent: ""
+        )
+        item.target = self
+        menu.addItem(item)
+        let viewPoint = view.convert(locationInWindow, from: nil)
+        menu.popUp(positioning: nil, at: viewPoint, in: view)
+    }
+
+    @objc private func hideClickedMascot() {
+        guard let mascot = rightClickedMascot else { return }
+        onMascotHideRequested?(mascot)
+        rightClickedMascot = nil
     }
 }

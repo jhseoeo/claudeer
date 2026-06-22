@@ -68,6 +68,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 WindowFocuser.focus(pid: pid, cwd: cwd)
             }
         }
+        interactionController?.onMascotHideRequested = { mascot in
+            sessionTracker.hide(mascot.sessionID)
+        }
 
         // Build the overlay windows (one per active screen) with the interaction
         // delegate wired, then lay out roaming areas in global coordinates.
