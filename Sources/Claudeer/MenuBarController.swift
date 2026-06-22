@@ -120,7 +120,11 @@ struct MenuBarPopoverView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                 ForEach(sessionTracker.sessions) { session in
-                    SessionRow(session: session)
+                    SessionRow(
+                        session: session,
+                        isHidden: sessionTracker.isHidden(session.id),
+                        onToggleHidden: { sessionTracker.toggleHidden(session.id) }
+                    )
                 }
             }
         }
@@ -129,6 +133,8 @@ struct MenuBarPopoverView: View {
 
 private struct SessionRow: View {
     let session: SessionInfo
+    let isHidden: Bool
+    let onToggleHidden: () -> Void
 
     var body: some View {
         HStack(spacing: 6) {
@@ -140,7 +146,14 @@ private struct SessionRow: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
             Spacer()
+            Button(action: onToggleHidden) {
+                Image(systemName: isHidden ? "eye.slash" : "eye")
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.borderless)
+            .help(isHidden ? "Show mascot" : "Hide mascot")
         }
+        .opacity(isHidden ? 0.5 : 1.0)
         .help(tooltip)
     }
 
