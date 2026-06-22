@@ -11,6 +11,7 @@ class Mascot {
     private let nameLabel = NameLabelView()
     private var displayName = ""
     private var showLabel = true
+    private(set) var isHidden = false
 
     init(
         sessionID: String,
@@ -58,6 +59,21 @@ class Mascot {
         layoutNameLabel()
     }
 
+    func setHidden(_ hidden: Bool) {
+        guard hidden != isHidden else { return }
+        isHidden = hidden
+        spriteEngine.view.isHidden = hidden
+        if hidden {
+            speechBubble.dismiss()
+            nameLabel.isHidden = true
+            characterController.setPaused(true)
+        } else {
+            characterController.setPaused(false)
+            updateLabelVisibility()
+            layoutNameLabel()
+        }
+    }
+
     func start() {
         characterController.start()
     }
@@ -75,6 +91,8 @@ class Mascot {
         state = newState
         spriteEngine.setState(newState)
         characterController.transitionTo(newState)
+
+        guard !isHidden else { return }
 
         let pos = spriteEngine.position
         let globalAnchor = NSPoint(

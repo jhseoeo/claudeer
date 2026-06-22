@@ -12,6 +12,7 @@ class CharacterController {
     private var isMoving = false
     private var isFrozen = false
     private var isDragging = false
+    private var isPaused = false
     private var idleTimer: TimeInterval = 0
     private var idleDuration: TimeInterval = 0
     private var transitionWorkItem: DispatchWorkItem?
@@ -46,6 +47,13 @@ class CharacterController {
         }
     }
 
+    func setPaused(_ paused: Bool) {
+        isPaused = paused
+        if paused {
+            isMoving = false
+        }
+    }
+
     var spriteFrame: NSRect { spriteEngine.view.frame }
 
     func setSpritePosition(_ point: NSPoint) {
@@ -65,7 +73,7 @@ class CharacterController {
     }
 
     private func tick() {
-        if isFrozen || isDragging { return }
+        if isPaused || isFrozen || isDragging { return }
         if !movements.value(for: currentState) {
             isMoving = false
             return
