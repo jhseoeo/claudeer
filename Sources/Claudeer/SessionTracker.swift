@@ -11,6 +11,7 @@ struct SessionInfo: Identifiable, Equatable {
 
 class SessionTracker: ObservableObject {
     @Published private(set) var sessions: [SessionInfo] = []
+    @Published private(set) var hiddenSessionIDs: Set<String> = []
     private var sessionMap: [String: SessionInfo] = [:]
 
     func record(_ event: SpeakiEvent, at date: Date = Date()) {
@@ -43,6 +44,9 @@ class SessionTracker: ObservableObject {
             }
         }
         if !pruned.isEmpty {
+            for info in pruned {
+                hiddenSessionIDs.remove(info.id)
+            }
             publishSessions()
         }
         return pruned
@@ -60,6 +64,26 @@ class SessionTracker: ObservableObject {
     /// The working directory for a session, used to match its window by title.
     func cwd(for sessionID: String) -> String? {
         sessionMap[sessionID]?.cwd
+    }
+
+    func hide(_ id: String) {
+        hiddenSessionIDs.insert(id)
+    }
+
+    func show(_ id: String) {
+        hiddenSessionIDs.remove(id)
+    }
+
+    func toggleHidden(_ id: String) {
+        if hiddenSessionIDs.contains(id) {
+            hiddenSessionIDs.remove(id)
+        } else {
+            hiddenSessionIDs.insert(id)
+        }
+    }
+
+    func isHidden(_ id: String) -> Bool {
+        hiddenSessionIDs.contains(id)
     }
 
     private func publishSessions() {

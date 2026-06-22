@@ -77,4 +77,40 @@ final class SessionTrackerTests: XCTestCase {
         tracker.record(SpeakiEvent(state: .working, sessionId: "b", pid: nil, cwd: nil))
         XCTAssertTrue(tracker.anyWorking)
     }
+
+    func testHideShowToggleAndIsHidden() {
+        let tracker = SessionTracker()
+        XCTAssertFalse(tracker.isHidden("a"))
+
+        tracker.hide("a")
+        XCTAssertTrue(tracker.isHidden("a"))
+        XCTAssertEqual(tracker.hiddenSessionIDs, ["a"])
+
+        tracker.show("a")
+        XCTAssertFalse(tracker.isHidden("a"))
+
+        tracker.toggleHidden("a")
+        XCTAssertTrue(tracker.isHidden("a"))
+        tracker.toggleHidden("a")
+        XCTAssertFalse(tracker.isHidden("a"))
+    }
+
+    func testRecordDoesNotClearHiddenState() {
+        let tracker = SessionTracker()
+        tracker.hide("abc")
+        // A new event for a hidden session must NOT un-hide it (sticky).
+        tracker.record(SpeakiEvent(state: .working, sessionId: "abc", pid: 100, cwd: "/p"))
+        XCTAssertTrue(tracker.isHidden("abc"))
+    }
+
+    func testPruneRemovesHiddenStateForDeadSession() {
+        let tracker = SessionTracker()
+        tracker.record(SpeakiEvent(state: .idle, sessionId: "dead", pid: 200, cwd: nil))
+        tracker.hide("dead")
+
+        _ = tracker.pruneDeadProcesses(isAlive: { _ in false })
+
+        XCTAssertFalse(tracker.isHidden("dead"))
+        XCTAssertTrue(tracker.hiddenSessionIDs.isEmpty)
+    }
 }
