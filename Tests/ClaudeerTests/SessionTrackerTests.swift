@@ -113,4 +113,74 @@ final class SessionTrackerTests: XCTestCase {
         XCTAssertFalse(tracker.isHidden("dead"))
         XCTAssertTrue(tracker.hiddenSessionIDs.isEmpty)
     }
+
+    // MARK: - Auto name (SessionInfo.name)
+
+    func testRecordStoresEventName() {
+        let tracker = SessionTracker()
+        tracker.record(SpeakiEvent(state: .idle, sessionId: "abc", pid: 1, cwd: "/p", name: "My Session"))
+        XCTAssertEqual(tracker.sessions[0].name, "My Session")
+    }
+
+    func testRecordPreservesNameWhenNotProvided() {
+        let tracker = SessionTracker()
+        tracker.record(SpeakiEvent(state: .idle, sessionId: "abc", pid: 1, cwd: "/p", name: "My Session"))
+        tracker.record(SpeakiEvent(state: .working, sessionId: "abc", pid: 1, cwd: "/p", name: nil))
+        XCTAssertEqual(tracker.sessions[0].name, "My Session")
+    }
+
+    // MARK: - Custom names
+
+    func testSetCustomNameAndResolve() {
+        let tracker = SessionTracker()
+        tracker.record(SpeakiEvent(state: .idle, sessionId: "abc", pid: 1, cwd: "/p", name: "Auto"))
+        tracker.setCustomName("Custom", for: "abc")
+        XCTAssertEqual(tracker.customName(for: "abc"), "Custom")
+        XCTAssertEqual(tracker.displayName(for: "abc"), "Custom")
+    }
+
+    func testDisplayNameFallsBackToAutoName() {
+        let tracker = SessionTracker()
+        tracker.record(SpeakiEvent(state: .idle, sessionId: "abc", pid: 1, cwd: "/p", name: "Auto"))
+        XCTAssertEqual(tracker.displayName(for: "abc"), "Auto")
+        XCTAssertNil(tracker.customName(for: "abc"))
+    }
+
+    func testEmptyCustomNameRevertsToAuto() {
+        let tracker = SessionTracker()
+        tracker.record(SpeakiEvent(state: .idle, sessionId: "abc", pid: 1, cwd: "/p", name: "Auto"))
+        tracker.setCustomName("Custom", for: "abc")
+        tracker.setCustomName("   ", for: "abc")
+        XCTAssertNil(tracker.customName(for: "abc"))
+        XCTAssertEqual(tracker.displayName(for: "abc"), "Auto")
+    }
+
+    func testCustomNameIsTrimmed() {
+        let tracker = SessionTracker()
+        tracker.setCustomName("  Custom  ", for: "abc")
+        XCTAssertEqual(tracker.customName(for: "abc"), "Custom")
+    }
+
+    func testRecordDoesNotClearCustomName() {
+        let tracker = SessionTracker()
+        tracker.setCustomName("Custom", for: "abc")
+        tracker.record(SpeakiEvent(state: .working, sessionId: "abc", pid: 1, cwd: "/p", name: "Auto"))
+        XCTAssertEqual(tracker.displayName(for: "abc"), "Custom")
+    }
+
+    func testDisplayNameNilWhenNothingKnown() {
+        let tracker = SessionTracker()
+        XCTAssertNil(tracker.displayName(for: "unknown"))
+    }
+
+    func testPruneRemovesCustomNameForDeadSession() {
+        let tracker = SessionTracker()
+        tracker.record(SpeakiEvent(state: .idle, sessionId: "dead", pid: 200, cwd: nil, name: "Auto"))
+        tracker.setCustomName("Custom", for: "dead")
+
+        _ = tracker.pruneDeadProcesses(isAlive: { _ in false })
+
+        XCTAssertNil(tracker.customName(for: "dead"))
+        XCTAssertTrue(tracker.customNames.isEmpty)
+    }
 }

@@ -5,6 +5,7 @@ struct SessionInfo: Identifiable, Equatable {
     let id: String
     var pid: Int?
     var cwd: String?
+    var name: String?
     var state: MascotState
     var lastSeen: Date
 }
@@ -12,6 +13,7 @@ struct SessionInfo: Identifiable, Equatable {
 class SessionTracker: ObservableObject {
     @Published private(set) var sessions: [SessionInfo] = []
     @Published private(set) var hiddenSessionIDs: Set<String> = []
+    @Published private(set) var customNames: [String: String] = [:]
     private var sessionMap: [String: SessionInfo] = [:]
 
     func record(_ event: SpeakiEvent, at date: Date = Date()) {
@@ -19,6 +21,7 @@ class SessionTracker: ObservableObject {
             id: event.sessionId,
             pid: nil,
             cwd: nil,
+            name: nil,
             state: event.state,
             lastSeen: date
         )
@@ -29,6 +32,9 @@ class SessionTracker: ObservableObject {
         }
         if let cwd = event.cwd {
             info.cwd = cwd
+        }
+        if let name = event.name {
+            info.name = name
         }
         sessionMap[event.sessionId] = info
         publishSessions()
@@ -46,6 +52,7 @@ class SessionTracker: ObservableObject {
         if !pruned.isEmpty {
             for info in pruned {
                 hiddenSessionIDs.remove(info.id)
+                customNames.removeValue(forKey: info.id)
             }
             publishSessions()
         }
@@ -84,6 +91,25 @@ class SessionTracker: ObservableObject {
 
     func isHidden(_ id: String) -> Bool {
         hiddenSessionIDs.contains(id)
+    }
+
+    /// Set a custom label for a session. Empty/whitespace clears it (reverts to auto).
+    func setCustomName(_ name: String?, for id: String) {
+        let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if trimmed.isEmpty {
+            customNames.removeValue(forKey: id)
+        } else {
+            customNames[id] = trimmed
+        }
+    }
+
+    func customName(for id: String) -> String? {
+        customNames[id]
+    }
+
+    /// The label to show for a session: custom name if set, else the last auto name.
+    func displayName(for id: String) -> String? {
+        customNames[id] ?? sessionMap[id]?.name
     }
 
     private func publishSessions() {
