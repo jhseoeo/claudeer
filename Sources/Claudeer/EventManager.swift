@@ -30,10 +30,21 @@ class EventManager {
         previousState != eventState && eventState == .idle
     }
 
+    /// Push/label title: custom name, else the event's auto name, else a short id.
+    static func notificationTitle(customName: String?, eventName: String?, sessionId: String) -> String {
+        if let c = customName?.trimmingCharacters(in: .whitespacesAndNewlines), !c.isEmpty {
+            return c
+        }
+        if let n = eventName?.trimmingCharacters(in: .whitespacesAndNewlines), !n.isEmpty {
+            return n
+        }
+        return String(sessionId.prefix(8))
+    }
+
     func handleEvent(_ event: SpeakiEvent) {
         sessionTracker.record(event)
         let mascot = mascotManager.ensureMascot(sessionID: event.sessionId)
-        mascot.setName(event.name)
+        mascot.setName(sessionTracker.displayName(for: event.sessionId))
         let previousState = mascot.state
         mascot.applyTransition(to: event.state, speech: speech(for: event.state))
         if Self.shouldNotifyIdle(previousState: previousState, eventState: event.state) {
@@ -42,12 +53,14 @@ class EventManager {
         updateGlobalState()
     }
 
-    /// Push title for a session: its name, else a short id (mirrors the label).
+    /// Push title for a session: custom name, else event name, else a short id
+    /// (mirrors the on-screen label).
     private func notificationTitle(for event: SpeakiEvent) -> String {
-        if let name = event.name?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty {
-            return name
-        }
-        return String(event.sessionId.prefix(8))
+        Self.notificationTitle(
+            customName: sessionTracker.customName(for: event.sessionId),
+            eventName: event.name,
+            sessionId: event.sessionId
+        )
     }
 
     /// Re-evaluate loop playback for the current global state. Call after app
