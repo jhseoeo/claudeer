@@ -41,6 +41,9 @@ class Mascot {
         NSRect(origin: spriteEngine.position, size: spriteEngine.size)
     }
 
+    /// The label text currently shown (custom/auto/short-id), for pre-filling the rename dialog.
+    var currentName: String { displayName }
+
     /// Set the session name shown under the mascot. Falls back to a short id.
     func setName(_ name: String?) {
         let resolved = name?.trimmingCharacters(in: .whitespacesAndNewlines)

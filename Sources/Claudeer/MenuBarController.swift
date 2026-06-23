@@ -122,6 +122,7 @@ struct MenuBarPopoverView: View {
                 ForEach(sessionTracker.sessions) { session in
                     SessionRow(
                         session: session,
+                        customName: sessionTracker.customName(for: session.id),
                         isHidden: sessionTracker.isHidden(session.id),
                         onToggleHidden: { sessionTracker.toggleHidden(session.id) }
                     )
@@ -133,6 +134,7 @@ struct MenuBarPopoverView: View {
 
 private struct SessionRow: View {
     let session: SessionInfo
+    let customName: String?
     let isHidden: Bool
     let onToggleHidden: () -> Void
 
@@ -158,6 +160,7 @@ private struct SessionRow: View {
     }
 
     private var label: String {
+        if let custom = customName, !custom.isEmpty { return custom }
         if let cwd = session.cwd, let last = cwd.split(separator: "/").last {
             return String(last)
         }

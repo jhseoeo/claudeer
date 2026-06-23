@@ -11,6 +11,9 @@ class InteractionController: NSObject, InteractionViewDelegate {
     /// Called when the user picks "Hide this character" from a mascot's right-click menu.
     var onMascotHideRequested: ((Mascot) -> Void)?
 
+    /// Called when the user picks "Rename…" from a mascot's right-click menu.
+    var onMascotRenameRequested: ((Mascot) -> Void)?
+
     private var pollingTimer: Timer?
     private var clickClearWorkItem: DispatchWorkItem?
 
@@ -155,6 +158,17 @@ class InteractionController: NSObject, InteractionViewDelegate {
 
         rightClickedMascot = target
         let menu = NSMenu()
+
+        let renameItem = NSMenuItem(
+            title: "Rename…",
+            action: #selector(renameClickedMascot),
+            keyEquivalent: ""
+        )
+        renameItem.target = self
+        menu.addItem(renameItem)
+
+        menu.addItem(.separator())
+
         let item = NSMenuItem(
             title: "Hide this character",
             action: #selector(hideClickedMascot),
@@ -162,8 +176,15 @@ class InteractionController: NSObject, InteractionViewDelegate {
         )
         item.target = self
         menu.addItem(item)
+
         let viewPoint = view.convert(locationInWindow, from: nil)
         menu.popUp(positioning: nil, at: viewPoint, in: view)
+    }
+
+    @objc private func renameClickedMascot() {
+        guard let mascot = rightClickedMascot else { return }
+        onMascotRenameRequested?(mascot)
+        rightClickedMascot = nil
     }
 
     @objc private func hideClickedMascot() {

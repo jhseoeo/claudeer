@@ -76,6 +76,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         interactionController?.onMascotHideRequested = { mascot in
             sessionTracker.hide(mascot.sessionID)
         }
+        interactionController?.onMascotRenameRequested = { mascot in
+            let alert = NSAlert()
+            alert.messageText = "Rename character"
+            alert.informativeText = "Set a custom name for this session's label."
+            alert.addButton(withTitle: "OK")
+            alert.addButton(withTitle: "Cancel")
+
+            let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 220, height: 24))
+            field.stringValue = mascot.currentName
+            field.placeholderString = "Leave empty for the automatic name"
+            alert.accessoryView = field
+            alert.window.initialFirstResponder = field
+
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+            sessionTracker.setCustomName(field.stringValue, for: mascot.sessionID)
+            mascot.setName(sessionTracker.displayName(for: mascot.sessionID))
+        }
 
         // Build the overlay windows (one per active screen) with the interaction
         // delegate wired, then lay out roaming areas in global coordinates.
