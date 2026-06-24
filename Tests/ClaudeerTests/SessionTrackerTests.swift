@@ -67,6 +67,77 @@ final class SessionTrackerTests: XCTestCase {
         XCTAssertEqual(tracker.sessions.count, 1)
     }
 
+    // MARK: - One-session-per-pid eviction (a Claude process hosts one session
+    // at a time; a new session_id on the same pid means the old session ended)
+
+    func testNewSessionOnSamePidEvictsOldSession() {
+        let tracker = SessionTracker()
+        tracker.record(SpeakiEvent(state: .idle, sessionId: "old", pid: 9123, cwd: "/p"))
+        let evicted = tracker.record(SpeakiEvent(state: .working, sessionId: "new", pid: 9123, cwd: "/p"))
+
+        XCTAssertEqual(evicted.map { $0.id }, ["old"])
+        XCTAssertEqual(tracker.sessions.map { $0.id }, ["new"])
+    }
+
+    func testEvictionClearsHiddenAndCustomNameOfOldSession() {
+        let tracker = SessionTracker()
+        tracker.record(SpeakiEvent(state: .idle, sessionId: "old", pid: 9123, cwd: nil))
+        tracker.hide("old")
+        tracker.setCustomName("Custom", for: "old")
+
+        tracker.record(SpeakiEvent(state: .idle, sessionId: "new", pid: 9123, cwd: nil))
+
+        XCTAssertFalse(tracker.isHidden("old"))
+        XCTAssertNil(tracker.customName(for: "old"))
+    }
+
+    func testDifferentPidsDoNotEvict() {
+        let tracker = SessionTracker()
+        tracker.record(SpeakiEvent(state: .idle, sessionId: "a", pid: 1, cwd: nil))
+        let evicted = tracker.record(SpeakiEvent(state: .idle, sessionId: "b", pid: 2, cwd: nil))
+
+        XCTAssertTrue(evicted.isEmpty)
+        XCTAssertEqual(tracker.sessions.count, 2)
+    }
+
+    func testNilPidDoesNotEvict() {
+        let tracker = SessionTracker()
+        tracker.record(SpeakiEvent(state: .idle, sessionId: "a", pid: nil, cwd: nil))
+        let evicted = tracker.record(SpeakiEvent(state: .idle, sessionId: "b", pid: nil, cwd: nil))
+
+        XCTAssertTrue(evicted.isEmpty)
+        XCTAssertEqual(tracker.sessions.count, 2)
+    }
+
+    func testSameSessionSamePidDoesNotSelfEvict() {
+        let tracker = SessionTracker()
+        tracker.record(SpeakiEvent(state: .idle, sessionId: "abc", pid: 100, cwd: nil))
+        let evicted = tracker.record(SpeakiEvent(state: .working, sessionId: "abc", pid: 100, cwd: nil))
+
+        XCTAssertTrue(evicted.isEmpty)
+        XCTAssertEqual(tracker.sessions.count, 1)
+    }
+
+    // MARK: - Liveness decision (alive + still a Claude process; guards pid reuse)
+
+    func testLivenessDeadProcessIsNotClaude() {
+        XCTAssertFalse(SessionTracker.isLiveClaude(alive: false, identity: "/x/share/claude/versions/2"))
+    }
+
+    func testLivenessAliveClaudePathIsKept() {
+        XCTAssertTrue(SessionTracker.isLiveClaude(
+            alive: true, identity: "/Users/x/.local/share/claude/versions/2.1.183"))
+    }
+
+    func testLivenessAliveNonClaudeIsPruned() {
+        XCTAssertFalse(SessionTracker.isLiveClaude(alive: true, identity: "/usr/local/bin/node"))
+    }
+
+    func testLivenessAliveUnknownIdentityIsKept() {
+        // Conservative: an unreadable identity must never reap a session.
+        XCTAssertTrue(SessionTracker.isLiveClaude(alive: true, identity: nil))
+    }
+
     func testAnyWorkingDetectsWorking() {
         let tracker = SessionTracker()
         XCTAssertFalse(tracker.anyWorking)

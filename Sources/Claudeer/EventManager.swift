@@ -42,7 +42,11 @@ class EventManager {
     }
 
     func handleEvent(_ event: SpeakiEvent) {
-        sessionTracker.record(event)
+        // A new session_id on an existing pid means the old session on that pid
+        // ended (/clear, resume, …); drop its now-orphaned mascot.
+        for session in sessionTracker.record(event) {
+            mascotManager.removeMascot(sessionID: session.id)
+        }
         let mascot = mascotManager.ensureMascot(sessionID: event.sessionId)
         mascot.setName(sessionTracker.displayName(for: event.sessionId))
         let previousState = mascot.state
