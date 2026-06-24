@@ -97,6 +97,10 @@ def main():
         send_event("idle", session_id, pid, cwd, name)
     elif hook_event == "Notification":
         send_event("idle", session_id, pid, cwd, name)
+    elif hook_event == "PreToolUse":
+        send_event("working", session_id, pid, cwd, name)
+    elif hook_event == "PostToolUse":
+        send_event("working", session_id, pid, cwd, name)
 
     print(json.dumps({"continue": True}))
 
