@@ -40,6 +40,11 @@ class MascotManager {
         mascot.characterController.setAreas(areas)
         mascot.characterController.setMovement(assetStore.config.movements)
         mascot.characterController.setSpeed(CGFloat(assetStore.config.speed))
+        mascot.characterController.setFlocking(assetStore.config.flocking)
+        mascot.characterController.setCursorGather(assetStore.config.cursorGather)
+        mascot.characterController.neighbors = { [weak self, sessionID] in
+            self?.neighborStates(excluding: sessionID) ?? []
+        }
         mascot.setLabelVisible(assetStore.config.showSessionLabel)
         mascot.start()
         mascots[sessionID] = mascot
@@ -55,6 +60,19 @@ class MascotManager {
         mascots[sessionID]
     }
 
+    /// Snapshots of every other mascot that is currently visible, for flocking.
+    func neighborStates(excluding id: String) -> [NeighborState] {
+        var result: [NeighborState] = []
+        for (sid, mascot) in mascots where sid != id && !mascot.isHidden {
+            result.append(NeighborState(
+                center: mascot.characterController.center,
+                velocity: mascot.characterController.currentVelocity,
+                engageableForMeeting: mascot.characterController.engageableForMeeting
+            ))
+        }
+        return result
+    }
+
     var allMascots: [Mascot] { Array(mascots.values) }
 
     var isEmpty: Bool { mascots.isEmpty }
@@ -65,6 +83,8 @@ class MascotManager {
             mascot.spriteEngine.setFlips(assetStore.config.flips)
             mascot.characterController.setMovement(assetStore.config.movements)
             mascot.characterController.setSpeed(CGFloat(assetStore.config.speed))
+            mascot.characterController.setFlocking(assetStore.config.flocking)
+            mascot.characterController.setCursorGather(assetStore.config.cursorGather)
             mascot.setLabelVisible(assetStore.config.showSessionLabel)
         }
     }

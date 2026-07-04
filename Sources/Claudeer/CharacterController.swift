@@ -17,6 +17,15 @@ class CharacterController {
     private var idleDuration: TimeInterval = 0
     private var transitionWorkItem: DispatchWorkItem?
 
+    private var velocity: CGVector = .zero
+    private var flocking: FlockingSettings = .default
+    private var cursorGather: CursorGatherSettings = .default
+    private var isMeeting = false
+
+    /// Supplies snapshots of the *other* eligible mascots. Defaults to none, so a
+    /// solo controller behaves exactly as before. Injected by `MascotManager`.
+    var neighbors: () -> [NeighborState] = { [] }
+
     init(spriteEngine: SpriteEngine) {
         self.spriteEngine = spriteEngine
     }
@@ -31,6 +40,7 @@ class CharacterController {
         movements = settings
         if !movements.value(for: currentState) {
             isMoving = false
+            velocity = .zero
         }
     }
 
@@ -38,10 +48,35 @@ class CharacterController {
         speed = value
     }
 
+    func setFlocking(_ settings: FlockingSettings) {
+        flocking = settings
+    }
+
+    func setCursorGather(_ settings: CursorGatherSettings) {
+        cursorGather = settings
+    }
+
+    /// The sprite's center in global screen coordinates.
+    var center: CGPoint {
+        let p = spriteEngine.position
+        let s = spriteEngine.size
+        return CGPoint(x: p.x + s.width / 2, y: p.y + s.height / 2)
+    }
+
+    var currentVelocity: CGVector { velocity }
+
+    /// Idle, movement-enabled, and not paused/frozen/dragging/meeting.
+    var engageableForMeeting: Bool {
+        currentState == .idle && !isPaused && !isFrozen && !isDragging
+            && !isMeeting && movements.value(for: currentState)
+    }
+
     func setBeingDragged(_ dragging: Bool) {
         isDragging = dragging
         if dragging {
             isMoving = false
+            isMeeting = false
+            velocity = .zero
         } else {
             pickNewIdleDuration()
         }
@@ -51,6 +86,8 @@ class CharacterController {
         isPaused = paused
         if paused {
             isMoving = false
+            isMeeting = false
+            velocity = .zero
         }
     }
 
@@ -179,6 +216,8 @@ class CharacterController {
         spriteEngine.setState(state)
         currentState = state
         isMoving = false
+        isMeeting = false
+        velocity = .zero
         isFrozen = true
         let workItem = DispatchWorkItem { [weak self] in
             self?.isFrozen = false
