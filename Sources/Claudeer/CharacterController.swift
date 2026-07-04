@@ -26,6 +26,14 @@ class CharacterController {
     /// solo controller behaves exactly as before. Injected by `MascotManager`.
     var neighbors: () -> [NeighborState] = { [] }
 
+    // Flock tuning (px unless noted). Refined during visual verification (Task 8).
+    private static let perceptionRadius: CGFloat = 600   // global-ish, so the group reliably gathers
+    private static let separationDistance: CGFloat = 64
+    private static let separationWeight: CGFloat = 2.0
+    private static let cohesionWeight: CGFloat = 1.6
+    private static let alignmentWeight: CGFloat = 0.5
+    private static let wanderWeight: CGFloat = 0.5       // keep wander from overpowering cohesion
+
     init(spriteEngine: SpriteEngine) {
         self.spriteEngine = spriteEngine
     }
@@ -113,8 +121,18 @@ class CharacterController {
         if isPaused || isFrozen || isDragging { return }
         if !movements.value(for: currentState) {
             isMoving = false
+            velocity = .zero
             return
         }
+        if flocking.enabled || cursorGather.enabled {
+            steeringTick()
+        } else {
+            legacyWanderTick()
+        }
+    }
+
+    /// The original target-based wander (both toggles off → identical to before).
+    private func legacyWanderTick() {
         if isMoving {
             moveTowardTarget()
         } else {
@@ -123,6 +141,63 @@ class CharacterController {
                 startWalking()
             }
         }
+    }
+
+    private func steeringTick() {
+        let neighborList = neighbors()
+        handleWander(neighborList)
+    }
+
+    /// Wander to a random in-area target with stop-and-go rests; blend in flock
+    /// forces when flocking is enabled.
+    private func handleWander(_ neighborList: [NeighborState]) {
+        if !isMoving {
+            idleTimer += 1.0 / 30.0
+            applySeparationNudge(neighborList)   // don't get overlapped while resting
+            if idleTimer >= idleDuration { startWalking() }
+            return
+        }
+        let pos = spriteEngine.position
+        let dx = target.x - pos.x
+        let dy = target.y - pos.y
+        if (dx * dx + dy * dy).squareRoot() < speed {
+            spriteEngine.setPosition(clampToAreas(target))
+            isMoving = false
+            velocity = .zero
+            pickNewIdleDuration()
+            return
+        }
+        let toTarget = Flocking.normalized(CGVector(dx: dx, dy: dy))
+        var forces: [(CGVector, CGFloat)] = []
+        if flocking.enabled {
+            let c = center
+            forces = [
+                (Flocking.separation(center: c, neighbors: neighborList, minDistance: Self.separationDistance), Self.separationWeight),
+                (Flocking.cohesion(center: c, neighbors: neighborList, perception: Self.perceptionRadius), Self.cohesionWeight),
+                (Flocking.alignment(center: c, velocity: velocity, neighbors: neighborList, perception: Self.perceptionRadius), Self.alignmentWeight),
+            ]
+        }
+        velocity = Flocking.steer(base: CGVector(dx: toTarget.dx * speed * Self.wanderWeight, dy: toTarget.dy * speed * Self.wanderWeight), forces: forces, maxSpeed: speed)
+        advance(by: velocity, clampToArea: true)
+    }
+
+    /// While resting, still push apart from any overlapping neighbor.
+    private func applySeparationNudge(_ neighborList: [NeighborState]) {
+        guard flocking.enabled else { return }
+        let sep = Flocking.separation(center: center, neighbors: neighborList, minDistance: Self.separationDistance)
+        guard sep.dx != 0 || sep.dy != 0 else { return }
+        velocity = Flocking.steer(base: .zero, forces: [(sep, Self.separationWeight)], maxSpeed: speed)
+        advance(by: velocity, clampToArea: true)
+    }
+
+    /// Move by `v`, optionally clamp into the roaming area, and face the movement.
+    private func advance(by v: CGVector, clampToArea: Bool) {
+        var pos = spriteEngine.position
+        pos.x += v.dx
+        pos.y += v.dy
+        if clampToArea { pos = clampToAreas(pos) }
+        if abs(v.dx) > 0.01 { spriteEngine.setFacing(left: v.dx < 0) }
+        spriteEngine.setPosition(pos)
     }
 
     private func startWalking() {
