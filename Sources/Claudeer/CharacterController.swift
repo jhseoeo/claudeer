@@ -33,6 +33,7 @@ class CharacterController {
     private static let cohesionWeight: CGFloat = 1.6
     private static let alignmentWeight: CGFloat = 0.5
     private static let wanderWeight: CGFloat = 0.5       // keep wander from overpowering cohesion
+    private static let cursorSeekWeight: CGFloat = 1.0
 
     init(spriteEngine: SpriteEngine) {
         self.spriteEngine = spriteEngine
@@ -145,7 +146,32 @@ class CharacterController {
 
     private func steeringTick() {
         let neighborList = neighbors()
+        if handleCursorSeek(neighborList) { return }
         handleWander(neighborList)
+    }
+
+    /// If cursor-gather is on and the cursor is within radius, steer toward it
+    /// (still separating from neighbors) without clamping to the roaming area.
+    /// Returns true when it handled this tick.
+    private func handleCursorSeek(_ neighborList: [NeighborState]) -> Bool {
+        guard cursorGather.enabled else { return false }
+        let cursor = NSEvent.mouseLocation   // NSPoint == CGPoint, global screen coords
+        guard let dir = Flocking.cursorSeek(center: center, cursor: cursor, radius: CGFloat(cursorGather.radius)) else {
+            return false
+        }
+        // Reset wander so it resumes cleanly (and re-enters the band) once the
+        // cursor leaves the radius.
+        isMoving = false
+        let sep = flocking.enabled
+            ? Flocking.separation(center: center, neighbors: neighborList, minDistance: Self.separationDistance)
+            : CGVector.zero
+        velocity = Flocking.steer(
+            base: CGVector(dx: dir.dx * speed * Self.cursorSeekWeight, dy: dir.dy * speed * Self.cursorSeekWeight),
+            forces: [(sep, Self.separationWeight)],
+            maxSpeed: speed
+        )
+        advance(by: velocity, clampToArea: false)
+        return true
     }
 
     /// Wander to a random in-area target with stop-and-go rests; blend in flock
