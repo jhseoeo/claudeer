@@ -60,17 +60,33 @@ class MascotManager {
         mascots[sessionID]
     }
 
-    /// Snapshots of every other mascot that is currently visible, for flocking.
+    /// Snapshots of every other visible mascot (centers), so wanderers avoid overlap.
     func neighborStates(excluding id: String) -> [NeighborState] {
         var result: [NeighborState] = []
         for (sid, mascot) in mascots where sid != id && !mascot.isHidden {
             result.append(NeighborState(
                 center: mascot.characterController.center,
                 velocity: mascot.characterController.currentVelocity,
-                engageableForMeeting: mascot.characterController.engageableForMeeting
+                engageableForMeeting: mascot.characterController.availableForEncounter
             ))
         }
         return result
+    }
+
+    /// All mascots' current state for the encounter coordinator.
+    func encounterParticipants() -> [EncounterParticipant] {
+        mascots.values.map { mascot in
+            EncounterParticipant(
+                id: mascot.sessionID,
+                controller: mascot.characterController,
+                center: mascot.characterController.center,
+                available: !mascot.isHidden && mascot.characterController.availableForEncounter
+            )
+        }
+    }
+
+    func controller(for sessionID: String) -> CharacterController? {
+        mascots[sessionID]?.characterController
     }
 
     var allMascots: [Mascot] { Array(mascots.values) }

@@ -40,6 +40,9 @@ struct FlipSettings: Codable {
     static let off = FlipSettings(directional: false, mirrored: false)
 }
 
+/// Gates episodic social encounters: mascots wander independently, occasionally
+/// gather with nearby ones to greet for a few seconds, then part (see
+/// `EncounterController`). Kept the `flocking` key for config back-compat.
 struct FlockingSettings: Codable {
     let enabled: Bool
 

@@ -20,29 +20,22 @@ class CharacterController {
     private var velocity: CGVector = .zero
     private var flocking: FlockingSettings = .default
     private var cursorGather: CursorGatherSettings = .default
-    private var isMeeting = false
-    private var meetTimer: TimeInterval = 0
-    private var meetDuration: TimeInterval = 0
-    private var meetCooldown: TimeInterval = 0
-    private var meetTargetCenter: CGPoint?
 
-    /// Supplies snapshots of the *other* eligible mascots. Defaults to none, so a
-    /// solo controller behaves exactly as before. Injected by `MascotManager`.
+    /// When set (by `EncounterController`) the mascot obeys the social directive
+    /// — gather to a point / cuddle facing it / disperse from it — instead of
+    /// wandering. Cleared when the encounter ends.
+    private var interaction: InteractionDirective?
+
+    /// Supplies snapshots of the *other* mascots (centers) so wanderers avoid
+    /// overlapping. Defaults to none, so a solo controller behaves as before.
     var neighbors: () -> [NeighborState] = { [] }
 
-    // Flock tuning (px unless noted). Refined during visual verification (Task 8).
-    private static let perceptionRadius: CGFloat = 600   // global-ish, so the group reliably gathers
+    // Movement tuning (px unless noted).
     private static let separationDistance: CGFloat = 64
     private static let separationWeight: CGFloat = 2.0
-    private static let cohesionWeight: CGFloat = 1.6
-    private static let cohesionDeadZone: CGFloat = 70   // no inward pull once this close to the group centroid
-    private static let alignmentWeight: CGFloat = 0.5
-    private static let wanderWeight: CGFloat = 0.5       // keep wander from overpowering cohesion
     private static let cursorSeekWeight: CGFloat = 1.0
     private static let facingFlipThreshold: CGFloat = 0.3   // smoothed |v.x| needed to turn the sprite
-    private static let meetDistance: CGFloat = 72          // > separationDistance so a huddle can greet
-    private static let meetDurationRange: ClosedRange<Double> = 1.0...2.0
-    private static let meetCooldownRange: ClosedRange<Double> = 5.0...9.0
+    private static let velocityDamping: CGFloat = 0.82      // momentum low-pass; smooth, no dense-cluster vibration
 
     init(spriteEngine: SpriteEngine) {
         self.spriteEngine = spriteEngine
@@ -83,19 +76,30 @@ class CharacterController {
 
     var currentVelocity: CGVector { velocity }
 
-    /// Idle, movement-enabled, and not paused/frozen/dragging/meeting.
-    var engageableForMeeting: Bool {
-        // Note: a meeting mascot stays engageable so the *other* one also enters
-        // the meeting and they face each other (mutual greeting).
+    /// Idle, movement-enabled, and not paused/frozen/dragging — eligible to be
+    /// pulled into a social encounter.
+    var availableForEncounter: Bool {
         currentState == .idle && !isPaused && !isFrozen && !isDragging
             && movements.value(for: currentState)
+    }
+
+    /// Drive this mascot's current encounter phase (set every tick by the
+    /// coordinator while an encounter is active).
+    func setInteraction(_ directive: InteractionDirective) {
+        interaction = directive
+    }
+
+    /// Release the mascot back to free wandering.
+    func clearInteraction() {
+        interaction = nil
+        pickNewIdleDuration()
     }
 
     func setBeingDragged(_ dragging: Bool) {
         isDragging = dragging
         if dragging {
             isMoving = false
-            isMeeting = false
+            interaction = nil
             velocity = .zero
         } else {
             pickNewIdleDuration()
@@ -106,7 +110,7 @@ class CharacterController {
         isPaused = paused
         if paused {
             isMoving = false
-            isMeeting = false
+            interaction = nil
             velocity = .zero
         }
     }
@@ -136,6 +140,10 @@ class CharacterController {
             velocity = .zero
             return
         }
+        if let directive = interaction {
+            handleInteraction(directive)
+            return
+        }
         if flocking.enabled || cursorGather.enabled {
             steeringTick()
         } else {
@@ -157,44 +165,32 @@ class CharacterController {
 
     private func steeringTick() {
         let neighborList = neighbors()
-        if handleMeeting(neighborList) { return }
         if handleCursorSeek(neighborList) { return }
         handleWander(neighborList)
     }
 
-    /// Face-and-pause "greeting": when idle and a neighbor is within meetDistance
-    /// (and off cooldown), stop and face them for meetDuration, then set cooldown.
-    /// Returns true when it handled this tick.
-    private func handleMeeting(_ neighborList: [NeighborState]) -> Bool {
-        guard flocking.enabled else { return false }
-        if meetCooldown > 0 { meetCooldown -= 1.0 / 30.0 }
-
-        if isMeeting {
-            meetTimer += 1.0 / 30.0
-            if let t = meetTargetCenter, abs(t.x - center.x) > 0.01 {
-                spriteEngine.setFacing(left: t.x < center.x)
-            }
+    /// Coordinator-driven social behavior: gather toward / cuddle facing /
+    /// disperse from the encounter focus point.
+    private func handleInteraction(_ directive: InteractionDirective) {
+        isMoving = false
+        let c = center
+        switch directive.mode {
+        case .cuddle:
             velocity = .zero
-            if meetTimer >= meetDuration {
-                isMeeting = false
-                meetTargetCenter = nil
-                meetCooldown = Double.random(in: Self.meetCooldownRange)
-                pickNewIdleDuration()
+            if abs(directive.focus.x - c.x) > 0.01 {
+                spriteEngine.setFacing(left: directive.focus.x < c.x)
             }
-            return true
+        case .gather:
+            let toFocus = Flocking.normalized(CGVector(dx: directive.focus.x - c.x, dy: directive.focus.y - c.y))
+            let sep = Flocking.separation(center: c, neighbors: neighbors(), minDistance: Self.separationDistance)
+            let desired = Flocking.steer(base: CGVector(dx: toFocus.dx * speed, dy: toFocus.dy * speed),
+                                         forces: [(sep, Self.separationWeight)], maxSpeed: speed)
+            move(toward: desired, clampToArea: true)
+        case .disperse:
+            var away = Flocking.normalized(CGVector(dx: c.x - directive.focus.x, dy: c.y - directive.focus.y))
+            if away.dx == 0 && away.dy == 0 { away = CGVector(dx: 1, dy: 0) }
+            move(toward: CGVector(dx: away.dx * speed, dy: away.dy * speed), clampToArea: true)
         }
-
-        guard currentState == .idle, meetCooldown <= 0 else { return false }
-        guard let targetCenter = Flocking.nearestMeetTarget(center: center, neighbors: neighborList, meetDistance: Self.meetDistance) else {
-            return false
-        }
-        isMeeting = true
-        meetTargetCenter = targetCenter
-        meetTimer = 0
-        meetDuration = Double.random(in: Self.meetDurationRange)
-        velocity = .zero
-        spriteEngine.setFacing(left: targetCenter.x < center.x)
-        return true
     }
 
     /// If cursor-gather is on and the cursor is within radius, steer toward it
@@ -206,27 +202,24 @@ class CharacterController {
         guard let dir = Flocking.cursorSeek(center: center, cursor: cursor, radius: CGFloat(cursorGather.radius)) else {
             return false
         }
-        // Reset wander so it resumes cleanly (and re-enters the band) once the
-        // cursor leaves the radius.
         isMoving = false
-        let sep = flocking.enabled
-            ? Flocking.separation(center: center, neighbors: neighborList, minDistance: Self.separationDistance)
-            : CGVector.zero
-        velocity = Flocking.steer(
+        let sep = Flocking.separation(center: center, neighbors: neighborList, minDistance: Self.separationDistance)
+        let desired = Flocking.steer(
             base: CGVector(dx: dir.dx * speed * Self.cursorSeekWeight, dy: dir.dy * speed * Self.cursorSeekWeight),
             forces: [(sep, Self.separationWeight)],
             maxSpeed: speed
         )
-        advance(by: velocity, clampToArea: false)
+        move(toward: desired, clampToArea: false)
         return true
     }
 
-    /// Wander to a random in-area target with stop-and-go rests; blend in flock
-    /// forces when flocking is enabled.
+    /// Random wander to an in-area target with stop-and-go rests; just avoid
+    /// overlapping neighbors (no constant cohesion — grouping is episodic and
+    /// driven by `EncounterController`).
     private func handleWander(_ neighborList: [NeighborState]) {
         if !isMoving {
             idleTimer += 1.0 / 30.0
-            applySeparationNudge(neighborList)   // don't get overlapped while resting
+            applySeparationNudge(neighborList)
             if idleTimer >= idleDuration { startWalking() }
             return
         }
@@ -241,23 +234,11 @@ class CharacterController {
             return
         }
         let toTarget = Flocking.normalized(CGVector(dx: dx, dy: dy))
-        var forces: [(CGVector, CGFloat)] = []
-        if flocking.enabled {
-            let c = center
-            // Cohesion only pulls when the mascot is OUTSIDE a comfortable radius of
-            // the group centroid; inside it there's no inward tug, so the huddle
-            // settles instead of overshooting/oscillating.
-            let cohOffset = Flocking.cohesion(center: c, neighbors: neighborList, perception: Self.perceptionRadius)
-            let cohDist = (cohOffset.dx * cohOffset.dx + cohOffset.dy * cohOffset.dy).squareRoot()
-            let cohForce = cohDist > Self.cohesionDeadZone ? Flocking.normalized(cohOffset) : .zero
-            forces = [
-                (Flocking.separation(center: c, neighbors: neighborList, minDistance: Self.separationDistance), Self.separationWeight),
-                (cohForce, Self.cohesionWeight),
-                (Flocking.alignment(center: c, velocity: velocity, neighbors: neighborList, perception: Self.perceptionRadius), Self.alignmentWeight),
-            ]
-        }
-        velocity = Flocking.steer(base: CGVector(dx: toTarget.dx * speed * Self.wanderWeight, dy: toTarget.dy * speed * Self.wanderWeight), forces: forces, maxSpeed: speed)
-        advance(by: velocity, clampToArea: true)
+        let forces: [(CGVector, CGFloat)] = flocking.enabled
+            ? [(Flocking.separation(center: center, neighbors: neighborList, minDistance: Self.separationDistance), Self.separationWeight)]
+            : []
+        let desired = Flocking.steer(base: CGVector(dx: toTarget.dx * speed, dy: toTarget.dy * speed), forces: forces, maxSpeed: speed)
+        move(toward: desired, clampToArea: true)
     }
 
     /// While resting, still push apart from any overlapping neighbor.
@@ -265,20 +246,30 @@ class CharacterController {
         guard flocking.enabled else { return }
         let sep = Flocking.separation(center: center, neighbors: neighborList, minDistance: Self.separationDistance)
         guard sep.dx != 0 || sep.dy != 0 else { return }
-        velocity = Flocking.steer(base: .zero, forces: [(sep, Self.separationWeight)], maxSpeed: speed)
-        advance(by: velocity, clampToArea: true)
+        let desired = Flocking.steer(base: .zero, forces: [(sep, Self.separationWeight)], maxSpeed: speed)
+        move(toward: desired, clampToArea: true)
     }
 
-    private var smoothedVX: CGFloat = 0    // low-pass filter so huddle jitter doesn't flip the sprite
+    private var smoothedVX: CGFloat = 0    // low-pass filter so cluster jitter doesn't flip the sprite
+
+    /// Apply `desired` velocity through a momentum low-pass, then move. Damping
+    /// averages out any per-frame direction flips so mascots drift smoothly
+    /// instead of vibrating, while a sustained direction ramps up to full speed.
+    private func move(toward desired: CGVector, clampToArea: Bool) {
+        let d = Self.velocityDamping
+        velocity = CGVector(dx: velocity.dx * d + desired.dx * (1 - d),
+                            dy: velocity.dy * d + desired.dy * (1 - d))
+        advance(by: velocity, clampToArea: clampToArea)
+    }
+
     /// Move by `v`, optionally clamp into the roaming area, and face the movement.
     private func advance(by v: CGVector, clampToArea: Bool) {
         var pos = spriteEngine.position
         pos.x += v.dx
         pos.y += v.dy
         if clampToArea { pos = clampToAreas(pos) }
-        // Face by a *smoothed* horizontal velocity. In a huddle the raw velocity.x
-        // sign flips every frame (cohesion vs separation tug); low-passing it makes
-        // that oscillation average out, so the sprite only turns on real travel.
+        // Face by a *smoothed* horizontal velocity so brief jitter doesn't flip
+        // the sprite — it only turns on sustained travel.
         smoothedVX = smoothedVX * 0.85 + v.dx * 0.15
         if abs(smoothedVX) > Self.facingFlipThreshold {
             spriteEngine.setFacing(left: smoothedVX < 0)
@@ -377,7 +368,7 @@ class CharacterController {
         spriteEngine.setState(state)
         currentState = state
         isMoving = false
-        isMeeting = false
+        interaction = nil
         velocity = .zero
         isFrozen = true
         let workItem = DispatchWorkItem { [weak self] in

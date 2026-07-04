@@ -11,6 +11,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var assetStore: AssetStore?
     var interactionController: InteractionController?
     var ntfyNotifier: NtfyNotifier?
+    var encounterController: EncounterController?
     private var cancellables = Set<AnyCancellable>()
     private var currentPreset: AreaPreset = .bottom
     private var currentTargetScreenID: String?
@@ -30,6 +31,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let manager = MascotManager(placer: overlay, assetStore: store)
         mascotManager = manager
         currentPreset = AreaPreset(rawValue: store.config.defaultArea) ?? .bottom
+
+        let encounter = EncounterController(manager: manager)
+        encounter.enabled = store.config.flocking.enabled
+        encounterController = encounter
+        encounter.start()
 
         let sessionTracker = SessionTracker()
         let notifier = NtfyNotifier(settings: store.config.ntfy)
@@ -51,6 +57,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self.eventManager?.config = store.config
             self.eventManager?.syncLoop()
             self.ntfyNotifier?.settings = store.config.ntfy
+            self.encounterController?.enabled = store.config.flocking.enabled
             if self.currentTargetScreenID != store.config.targetScreenID {
                 self.currentTargetScreenID = store.config.targetScreenID
                 self.overlayController?.configure(targetScreenID: store.config.targetScreenID)
@@ -153,6 +160,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         eventServer?.stop()
         eventManager?.stopPIDMonitoring()
         interactionController?.stop()
+        encounterController?.stop()
     }
 
     @objc private func screensDidChange() {

@@ -76,7 +76,7 @@ open dist/Claudeer.app
 | `Move while idle` | idle 상태일 때 어슬렁거릴지 (체크 해제 시 그 상태에선 정지) |
 | `Move while working` | working 상태일 때 어슬렁거릴지 |
 | `Speed` | 글로벌 이동 속도 슬라이더 (Slow ↔ Fast). 슬라이더 움직이면 즉시 반영 |
-| `Flock together` | 세션이 여러 개일 때 캐릭터들이 서로 옹기종기 모이고(겹치지 않음) 가까워지면 가끔 마주보고 잠깐 멈춰 인사. 기본 켜짐 |
+| `Social encounters` | 여러 세션일 때 평소엔 각자 배회하다가, 가까워진 애들끼리 잠깐(≈3초) 모여 인사하고 다시 흩어짐. 한 번 모인 캐릭터는 60초간 아무와도 안 모이고 배회만 하다 다시 참여. 3+ 우르르도 가능. 기본 켜짐 |
 | `Gather to the mouse cursor` | 커서 일정 반경 안의 캐릭터가 마우스로 모임 (필요하면 로밍 영역을 벗어나서라도). 기본 꺼짐 |
 | `Cursor range` | 위 옵션의 반경 슬라이더 (Near ↔ Far) |
 

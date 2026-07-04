@@ -105,7 +105,7 @@ struct PreferencesView: View {
 
             Divider()
 
-            Toggle("Flock together (gather, avoid overlap, greet when close)", isOn: Binding(
+            Toggle("Social encounters (wander, gather to greet, then part)", isOn: Binding(
                 get: { assetStore.config.flocking.enabled },
                 set: { assetStore.updateFlocking($0) }
             ))
