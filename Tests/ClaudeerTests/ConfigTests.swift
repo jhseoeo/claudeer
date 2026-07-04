@@ -197,4 +197,47 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(reloaded.ntfy.topic, "t")
         XCTAssertEqual(reloaded.ntfy.token, "k")
     }
+
+    func testParseConfigWithFlockingAndCursorGather() throws {
+        let json = """
+        {
+          "default_area": "bottom",
+          "speeches": { "idle": "a", "working": "b" },
+          "flocking": { "enabled": false },
+          "cursor_gather": { "enabled": true, "radius": 320 }
+        }
+        """.data(using: .utf8)!
+        let config = try JSONDecoder().decode(SpeakiConfig.self, from: json)
+        XCTAssertFalse(config.flocking.enabled)
+        XCTAssertTrue(config.cursorGather.enabled)
+        XCTAssertEqual(config.cursorGather.radius, 320)
+    }
+
+    func testParseConfigWithoutFlockingUsesDefaults() throws {
+        let json = """
+        {
+          "default_area": "bottom",
+          "speeches": { "idle": "a", "working": "b" }
+        }
+        """.data(using: .utf8)!
+        let config = try JSONDecoder().decode(SpeakiConfig.self, from: json)
+        XCTAssertTrue(config.flocking.enabled)          // default ON
+        XCTAssertFalse(config.cursorGather.enabled)      // default OFF
+        XCTAssertEqual(config.cursorGather.radius, 250)
+    }
+
+    func testConfigRoundTripsFlockingAndCursor() throws {
+        let config = SpeakiConfig(
+            defaultArea: "bottom",
+            speeches: Speeches(idle: "a", working: "b"),
+            loops: .off, movements: .allOn, speed: 2.0, flips: .off,
+            flocking: FlockingSettings(enabled: false),
+            cursorGather: CursorGatherSettings(enabled: true, radius: 300)
+        )
+        let data = try JSONEncoder().encode(config)
+        let decoded = try JSONDecoder().decode(SpeakiConfig.self, from: data)
+        XCTAssertFalse(decoded.flocking.enabled)
+        XCTAssertTrue(decoded.cursorGather.enabled)
+        XCTAssertEqual(decoded.cursorGather.radius, 300)
+    }
 }

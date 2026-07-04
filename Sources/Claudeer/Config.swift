@@ -40,6 +40,21 @@ struct FlipSettings: Codable {
     static let off = FlipSettings(directional: false, mirrored: false)
 }
 
+struct FlockingSettings: Codable {
+    let enabled: Bool
+
+    static let `default` = FlockingSettings(enabled: true)
+}
+
+struct CursorGatherSettings: Codable {
+    let enabled: Bool
+    let radius: Double
+
+    static let defaultRadius: Double = 250
+    static let radiusRange: ClosedRange<Double> = 100...600
+    static let `default` = CursorGatherSettings(enabled: false, radius: defaultRadius)
+}
+
 /// Push-notification settings for ntfy.sh (or a self-hosted ntfy server).
 /// A push fires when a session transitions to `idle`, mirroring the speech bubble.
 struct NtfySettings: Codable {
@@ -62,6 +77,8 @@ struct SpeakiConfig: Codable {
     let targetScreenID: String?
     let showSessionLabel: Bool
     let ntfy: NtfySettings
+    let flocking: FlockingSettings
+    let cursorGather: CursorGatherSettings
 
     static let defaultSpeed: Double = 2.0
     static let speedRange: ClosedRange<Double> = 0.5...6.0
@@ -76,9 +93,11 @@ struct SpeakiConfig: Codable {
         case targetScreenID = "target_screen_id"
         case showSessionLabel = "show_session_label"
         case ntfy
+        case flocking
+        case cursorGather = "cursor_gather"
     }
 
-    init(defaultArea: String, speeches: Speeches, loops: LoopSettings, movements: MovementSettings, speed: Double, flips: FlipSettings, targetScreenID: String? = nil, showSessionLabel: Bool = true, ntfy: NtfySettings = .off) {
+    init(defaultArea: String, speeches: Speeches, loops: LoopSettings, movements: MovementSettings, speed: Double, flips: FlipSettings, targetScreenID: String? = nil, showSessionLabel: Bool = true, ntfy: NtfySettings = .off, flocking: FlockingSettings = .default, cursorGather: CursorGatherSettings = .default) {
         self.defaultArea = defaultArea
         self.speeches = speeches
         self.loops = loops
@@ -88,6 +107,8 @@ struct SpeakiConfig: Codable {
         self.targetScreenID = targetScreenID
         self.showSessionLabel = showSessionLabel
         self.ntfy = ntfy
+        self.flocking = flocking
+        self.cursorGather = cursorGather
     }
 
     init(from decoder: Decoder) throws {
@@ -101,6 +122,8 @@ struct SpeakiConfig: Codable {
         self.targetScreenID = try container.decodeIfPresent(String.self, forKey: .targetScreenID)
         self.showSessionLabel = try container.decodeIfPresent(Bool.self, forKey: .showSessionLabel) ?? true
         self.ntfy = try container.decodeIfPresent(NtfySettings.self, forKey: .ntfy) ?? .off
+        self.flocking = try container.decodeIfPresent(FlockingSettings.self, forKey: .flocking) ?? .default
+        self.cursorGather = try container.decodeIfPresent(CursorGatherSettings.self, forKey: .cursorGather) ?? .default
     }
 
     static let `default` = SpeakiConfig(
@@ -115,7 +138,9 @@ struct SpeakiConfig: Codable {
         flips: .off,
         targetScreenID: nil,
         showSessionLabel: true,
-        ntfy: .off
+        ntfy: .off,
+        flocking: .default,
+        cursorGather: .default
     )
 
     static func load(from url: URL) -> SpeakiConfig {

@@ -147,6 +147,14 @@ class AssetStore: ObservableObject {
         setConfig(ntfy: value)
     }
 
+    func updateFlocking(_ enabled: Bool) {
+        setConfig(flocking: FlockingSettings(enabled: enabled))
+    }
+
+    func updateCursorGather(_ value: CursorGatherSettings) {
+        setConfig(cursorGather: value)
+    }
+
     private func setConfig(
         speeches: Speeches? = nil,
         loops: LoopSettings? = nil,
@@ -155,7 +163,9 @@ class AssetStore: ObservableObject {
         flips: FlipSettings? = nil,
         targetScreenID: String??  = nil,
         showSessionLabel: Bool? = nil,
-        ntfy: NtfySettings? = nil
+        ntfy: NtfySettings? = nil,
+        flocking: FlockingSettings? = nil,
+        cursorGather: CursorGatherSettings? = nil
     ) {
         config = SpeakiConfig(
             defaultArea: config.defaultArea,
@@ -166,7 +176,9 @@ class AssetStore: ObservableObject {
             flips: flips ?? config.flips,
             targetScreenID: targetScreenID ?? config.targetScreenID,
             showSessionLabel: showSessionLabel ?? config.showSessionLabel,
-            ntfy: ntfy ?? config.ntfy
+            ntfy: ntfy ?? config.ntfy,
+            flocking: flocking ?? config.flocking,
+            cursorGather: cursorGather ?? config.cursorGather
         )
         try? config.save(to: configURL)
         notify()
