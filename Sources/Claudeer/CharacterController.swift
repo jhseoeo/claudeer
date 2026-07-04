@@ -35,9 +35,11 @@ class CharacterController {
     private static let separationDistance: CGFloat = 64
     private static let separationWeight: CGFloat = 2.0
     private static let cohesionWeight: CGFloat = 1.6
+    private static let cohesionDeadZone: CGFloat = 70   // no inward pull once this close to the group centroid
     private static let alignmentWeight: CGFloat = 0.5
     private static let wanderWeight: CGFloat = 0.5       // keep wander from overpowering cohesion
     private static let cursorSeekWeight: CGFloat = 1.0
+    private static let facingFlipThreshold: CGFloat = 0.3   // smoothed |v.x| needed to turn the sprite
     private static let meetDistance: CGFloat = 72          // > separationDistance so a huddle can greet
     private static let meetDurationRange: ClosedRange<Double> = 1.0...2.0
     private static let meetCooldownRange: ClosedRange<Double> = 5.0...9.0
@@ -242,9 +244,15 @@ class CharacterController {
         var forces: [(CGVector, CGFloat)] = []
         if flocking.enabled {
             let c = center
+            // Cohesion only pulls when the mascot is OUTSIDE a comfortable radius of
+            // the group centroid; inside it there's no inward tug, so the huddle
+            // settles instead of overshooting/oscillating.
+            let cohOffset = Flocking.cohesion(center: c, neighbors: neighborList, perception: Self.perceptionRadius)
+            let cohDist = (cohOffset.dx * cohOffset.dx + cohOffset.dy * cohOffset.dy).squareRoot()
+            let cohForce = cohDist > Self.cohesionDeadZone ? Flocking.normalized(cohOffset) : .zero
             forces = [
                 (Flocking.separation(center: c, neighbors: neighborList, minDistance: Self.separationDistance), Self.separationWeight),
-                (Flocking.cohesion(center: c, neighbors: neighborList, perception: Self.perceptionRadius), Self.cohesionWeight),
+                (cohForce, Self.cohesionWeight),
                 (Flocking.alignment(center: c, velocity: velocity, neighbors: neighborList, perception: Self.perceptionRadius), Self.alignmentWeight),
             ]
         }
@@ -261,13 +269,20 @@ class CharacterController {
         advance(by: velocity, clampToArea: true)
     }
 
+    private var smoothedVX: CGFloat = 0    // low-pass filter so huddle jitter doesn't flip the sprite
     /// Move by `v`, optionally clamp into the roaming area, and face the movement.
     private func advance(by v: CGVector, clampToArea: Bool) {
         var pos = spriteEngine.position
         pos.x += v.dx
         pos.y += v.dy
         if clampToArea { pos = clampToAreas(pos) }
-        if abs(v.dx) > 0.01 { spriteEngine.setFacing(left: v.dx < 0) }
+        // Face by a *smoothed* horizontal velocity. In a huddle the raw velocity.x
+        // sign flips every frame (cohesion vs separation tug); low-passing it makes
+        // that oscillation average out, so the sprite only turns on real travel.
+        smoothedVX = smoothedVX * 0.85 + v.dx * 0.15
+        if abs(smoothedVX) > Self.facingFlipThreshold {
+            spriteEngine.setFacing(left: smoothedVX < 0)
+        }
         spriteEngine.setPosition(pos)
     }
 

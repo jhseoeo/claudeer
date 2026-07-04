@@ -30,8 +30,10 @@ enum Flocking {
         return CGVector(dx: dx, dy: dy)
     }
 
-    /// Steer toward the average position of neighbors within `perception`.
-    /// Returns a unit vector (or zero when there are no neighbors in range).
+    /// The **raw offset** from `center` to the average position of neighbors
+    /// within `perception` (zero when none in range). Returning the offset (not a
+    /// unit vector) lets the caller gate cohesion by distance — no inward pull once
+    /// a mascot is comfortably inside the group, which kills equilibrium jitter.
     static func cohesion(center: CGPoint, neighbors: [NeighborState], perception: CGFloat) -> CGVector {
         var sumX: CGFloat = 0
         var sumY: CGFloat = 0
@@ -46,7 +48,7 @@ enum Flocking {
             }
         }
         guard count > 0 else { return .zero }
-        return normalized(CGVector(dx: sumX / count - center.x, dy: sumY / count - center.y))
+        return CGVector(dx: sumX / count - center.x, dy: sumY / count - center.y)
     }
 
     /// Steer toward the average velocity (heading) of neighbors within `perception`.
