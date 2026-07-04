@@ -102,6 +102,36 @@ struct PreferencesView: View {
                     label: { EmptyView() }
                 )
             }
+
+            Divider()
+
+            Toggle("Flock together (gather, avoid overlap, greet when close)", isOn: Binding(
+                get: { assetStore.config.flocking.enabled },
+                set: { assetStore.updateFlocking($0) }
+            ))
+            .toggleStyle(.checkbox)
+
+            Toggle("Gather to the mouse cursor", isOn: Binding(
+                get: { assetStore.config.cursorGather.enabled },
+                set: { assetStore.updateCursorGather(CursorGatherSettings(enabled: $0, radius: assetStore.config.cursorGather.radius)) }
+            ))
+            .toggleStyle(.checkbox)
+
+            HStack {
+                Text("Cursor range")
+                    .frame(width: 80, alignment: .leading)
+                Slider(
+                    value: Binding(
+                        get: { assetStore.config.cursorGather.radius },
+                        set: { assetStore.updateCursorGather(CursorGatherSettings(enabled: assetStore.config.cursorGather.enabled, radius: $0)) }
+                    ),
+                    in: CursorGatherSettings.radiusRange,
+                    minimumValueLabel: Text("Near").font(.caption).foregroundColor(.secondary),
+                    maximumValueLabel: Text("Far").font(.caption).foregroundColor(.secondary),
+                    label: { EmptyView() }
+                )
+                .disabled(!assetStore.config.cursorGather.enabled)
+            }
         }
     }
 
