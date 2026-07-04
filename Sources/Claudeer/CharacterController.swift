@@ -21,6 +21,10 @@ class CharacterController {
     private var flocking: FlockingSettings = .default
     private var cursorGather: CursorGatherSettings = .default
     private var isMeeting = false
+    private var meetTimer: TimeInterval = 0
+    private var meetDuration: TimeInterval = 0
+    private var meetCooldown: TimeInterval = 0
+    private var meetTargetCenter: CGPoint?
 
     /// Supplies snapshots of the *other* eligible mascots. Defaults to none, so a
     /// solo controller behaves exactly as before. Injected by `MascotManager`.
@@ -34,6 +38,9 @@ class CharacterController {
     private static let alignmentWeight: CGFloat = 0.5
     private static let wanderWeight: CGFloat = 0.5       // keep wander from overpowering cohesion
     private static let cursorSeekWeight: CGFloat = 1.0
+    private static let meetDistance: CGFloat = 72          // > separationDistance so a huddle can greet
+    private static let meetDurationRange: ClosedRange<Double> = 1.0...2.0
+    private static let meetCooldownRange: ClosedRange<Double> = 5.0...9.0
 
     init(spriteEngine: SpriteEngine) {
         self.spriteEngine = spriteEngine
@@ -76,8 +83,10 @@ class CharacterController {
 
     /// Idle, movement-enabled, and not paused/frozen/dragging/meeting.
     var engageableForMeeting: Bool {
+        // Note: a meeting mascot stays engageable so the *other* one also enters
+        // the meeting and they face each other (mutual greeting).
         currentState == .idle && !isPaused && !isFrozen && !isDragging
-            && !isMeeting && movements.value(for: currentState)
+            && movements.value(for: currentState)
     }
 
     func setBeingDragged(_ dragging: Bool) {
@@ -146,8 +155,44 @@ class CharacterController {
 
     private func steeringTick() {
         let neighborList = neighbors()
+        if handleMeeting(neighborList) { return }
         if handleCursorSeek(neighborList) { return }
         handleWander(neighborList)
+    }
+
+    /// Face-and-pause "greeting": when idle and a neighbor is within meetDistance
+    /// (and off cooldown), stop and face them for meetDuration, then set cooldown.
+    /// Returns true when it handled this tick.
+    private func handleMeeting(_ neighborList: [NeighborState]) -> Bool {
+        guard flocking.enabled else { return false }
+        if meetCooldown > 0 { meetCooldown -= 1.0 / 30.0 }
+
+        if isMeeting {
+            meetTimer += 1.0 / 30.0
+            if let t = meetTargetCenter, abs(t.x - center.x) > 0.01 {
+                spriteEngine.setFacing(left: t.x < center.x)
+            }
+            velocity = .zero
+            if meetTimer >= meetDuration {
+                isMeeting = false
+                meetTargetCenter = nil
+                meetCooldown = Double.random(in: Self.meetCooldownRange)
+                pickNewIdleDuration()
+            }
+            return true
+        }
+
+        guard currentState == .idle, meetCooldown <= 0 else { return false }
+        guard let targetCenter = Flocking.nearestMeetTarget(center: center, neighbors: neighborList, meetDistance: Self.meetDistance) else {
+            return false
+        }
+        isMeeting = true
+        meetTargetCenter = targetCenter
+        meetTimer = 0
+        meetDuration = Double.random(in: Self.meetDurationRange)
+        velocity = .zero
+        spriteEngine.setFacing(left: targetCenter.x < center.x)
+        return true
     }
 
     /// If cursor-gather is on and the cursor is within radius, steer toward it
