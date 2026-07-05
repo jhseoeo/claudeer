@@ -25,6 +25,8 @@ class CharacterController {
     /// — gather to a point / cuddle facing it / disperse from it — instead of
     /// wandering. Cleared when the encounter ends.
     private var interaction: InteractionDirective?
+    private var cuddleBaseY: CGFloat?   // resting y captured when cuddling starts; hop bounces around it
+    private var cuddleFrame = 0
 
     /// Supplies snapshots of the *other* mascots (centers) so wanderers avoid
     /// overlapping. Defaults to none, so a solo controller behaves as before.
@@ -36,6 +38,8 @@ class CharacterController {
     private static let cursorSeekWeight: CGFloat = 1.0
     private static let facingFlipThreshold: CGFloat = 0.3   // smoothed |v.x| needed to turn the sprite
     private static let velocityDamping: CGFloat = 0.82      // momentum low-pass; smooth, no dense-cluster vibration
+    private static let hopHeight: CGFloat = 16              // cuddle bounce height (px)
+    private static let hopSpeed: Double = 0.32             // cuddle bounce rate (radians/frame; ~0.3s per hop)
 
     init(spriteEngine: SpriteEngine) {
         self.spriteEngine = spriteEngine
@@ -92,6 +96,7 @@ class CharacterController {
     /// Release the mascot back to free wandering.
     func clearInteraction() {
         interaction = nil
+        cuddleBaseY = nil
         pickNewIdleDuration()
     }
 
@@ -173,10 +178,16 @@ class CharacterController {
     /// disperse from the encounter focus point.
     private func handleInteraction(_ directive: InteractionDirective) {
         isMoving = false
+        if directive.mode != .cuddle { cuddleBaseY = nil }
         let c = center
         switch directive.mode {
         case .cuddle:
             velocity = .zero
+            // A little celebratory hop, bouncing around the spot where cuddling began.
+            if cuddleBaseY == nil { cuddleBaseY = spriteEngine.position.y; cuddleFrame = 0 }
+            cuddleFrame += 1
+            let hop = Self.hopHeight * CGFloat(abs(sin(Double(cuddleFrame) * Self.hopSpeed)))
+            spriteEngine.setPosition(NSPoint(x: spriteEngine.position.x, y: (cuddleBaseY ?? spriteEngine.position.y) + hop))
             if abs(directive.focus.x - c.x) > 0.01 {
                 spriteEngine.setFacing(left: directive.focus.x < c.x)
             }

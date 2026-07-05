@@ -95,6 +95,12 @@ class Mascot {
         spriteEngine.setState(newState)
         characterController.transitionTo(newState)
 
+        presentBubble(speech)
+    }
+
+    /// Show a bubble with `text` above the sprite — reused by state transitions
+    /// and the cuddle heart.
+    private func presentBubble(_ text: String, duration: TimeInterval = 4.0) {
         guard !isHidden else { return }
 
         let pos = spriteEngine.position
@@ -110,8 +116,12 @@ class Mascot {
             x: globalAnchor.x - host.globalOrigin.x,
             y: globalAnchor.y - host.globalOrigin.y
         )
-        speechBubble.show(text: speech, above: localAnchor)
+        speechBubble.show(text: text, above: localAnchor, duration: duration)
     }
+
+    /// A ❤️ pop above the mascot while it cuddles in a social encounter.
+    func showHeart() { presentBubble("❤️", duration: 3.2) }
+    func hideHeart() { speechBubble.dismiss() }
 
     private func updateLabelVisibility() {
         nameLabel.isHidden = isHidden || !showLabel || displayName.isEmpty
